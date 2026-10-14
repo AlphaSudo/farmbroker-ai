@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { hubHeaders } from "@/lib/auth/hub-client";
 
 interface S { id: string; name: string; crop: string; quantity_kg: number; min_price: number; location: string | null; quality_score: number | null; pool: string; }
 
@@ -13,33 +14,47 @@ export default function HubSuppliers() {
   const [pool, setPool] = useState("demo");
   const [rows, setRows] = useState<S[]>([]);
   const [msg, setMsg] = useState("");
+  const [key, setKey] = useState("");
+  const [unlocked, setUnlocked] = useState(() => typeof window !== "undefined" && !!window.sessionStorage.getItem("fb_hub_key"));
   const [f, setF] = useState({ name: "", crop: "Mint", quantity_kg: "", min_price: "", location: "", quality_score: "" });
 
   async function load(p = pool) {
-    const r = await fetch(`/api/hub/suppliers?pool=${p}`).then((x) => x.json());
-    setRows(r.suppliers ?? []);
+    const r = await fetch(`/api/hub/suppliers?pool=${p}`, { headers: hubHeaders() }).then((x) => x.json());
+    if (r.suppliers) { setRows(r.suppliers); setMsg(""); }
+    else setMsg(r.error ?? "Hub key required");
+  }
+  function unlock() {
+    window.sessionStorage.setItem("fb_hub_key", key);
+    setUnlocked(true);
+    fetch(`/api/hub/suppliers?pool=demo`, { headers: { "x-hub-key": key } }).then((x) => x.json()).then((r) => {
+      if (r.suppliers) setRows(r.suppliers);
+      else setMsg(r.error ?? "Invalid Hub key");
+    });
   }
   useEffect(() => {
-    fetch(`/api/hub/suppliers?pool=demo`).then((x) => x.json()).then((r) => setRows(r.suppliers ?? []));
-  }, []);
+    if (!unlocked) return;
+    fetch(`/api/hub/suppliers?pool=demo`, { headers: hubHeaders() }).then((x) => x.json()).then((r) => {
+      if (r.suppliers) setRows(r.suppliers);
+    });
+  }, [unlocked]);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    const r = await fetch("/api/hub/suppliers", { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await fetch("/api/hub/suppliers", { method: "POST", headers: { "Content-Type": "application/json", ...hubHeaders() },
       body: JSON.stringify({ ...f, quantity_kg: Number(f.quantity_kg), min_price: Number(f.min_price), quality_score: f.quality_score ? Number(f.quality_score) : null }) });
     setMsg(r.ok ? "Added" : (await r.json()).error);
     load();
   }
   async function importFull() {
     setMsg("Importing…");
-    const r = await fetch("/api/hub/import", { method: "POST" });
+    const r = await fetch("/api/hub/import", { method: "POST", headers: hubHeaders() });
     const d = await r.json();
     setMsg(r.ok ? `Imported ${d.imported} full-pool suppliers` : d.error);
     load();
   }
   async function resetDemo() {
     setMsg("Resetting demo seed…");
-    for (const d of DEMO) await fetch("/api/hub/suppliers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
+    for (const d of DEMO) await fetch("/api/hub/suppliers", { method: "POST", headers: { "Content-Type": "application/json", ...hubHeaders() }, body: JSON.stringify(d) });
     setMsg("Demo seed restored (3 suppliers)");
     setPool("demo"); load("demo");
   }
@@ -47,7 +62,13 @@ export default function HubSuppliers() {
   return (
     <div className="min-h-screen bg-emerald-950 font-sans text-emerald-50">
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
-        <p className="rounded-xl border border-amber-500/60 p-3 text-sm text-amber-200">Internal ops — never shown to buyers (GR#1). Buyer flow never links here.</p>
+        <p className="rounded-xl border border-amber-500/60 p-3 text-sm text-amber-200">Internal ops — Hub key enforced server-side. Never shown to buyers (GR#1). Buyer flow never links here.</p>
+        {!unlocked && (
+          <div className="flex gap-2 rounded-2xl bg-emerald-900/60 p-4">
+            <input type="password" placeholder="Hub key (HUB_KEY)" value={key} onChange={(e) => setKey(e.target.value)} className="flex-1 rounded-lg bg-emerald-950 px-3 py-2" />
+            <button onClick={unlock} className="rounded-full bg-amber-400 px-5 py-2 font-bold text-emerald-950">Unlock Hub</button>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Hub — Suppliers ({pool})</h1>
           <div className="flex gap-2">

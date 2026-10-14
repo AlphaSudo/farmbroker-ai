@@ -103,23 +103,24 @@ export default function Home() {
           </p>
         </section>
 
-        {/* Prototype tracker (P7) */}
+        {/* Live demo map */}
         <section className="rounded-2xl bg-emerald-900/60 p-6">
-          <h2 className="font-semibold">Prototype tracker (v0.1 → v1.0)</h2>
+          <h2 className="font-semibold">Live in this sandbox demo</h2>
           <ul className="mt-3 space-y-2">
             {PROTOTYPE.map((s) => (
               <li key={s} className="flex items-center gap-3 text-emerald-200">
                 <span className="rounded-full border border-amber-500/60 px-2 py-0.5 text-xs text-amber-300">
-                  coming
+                  live
                 </span>
                 {s}
               </li>
             ))}
           </ul>
           <p className="mt-4 text-sm text-emerald-300">
-            Impact: 100 farmers → 1 mega-supplier · ~5 hrs saved per trader per
-            week. Buyer dashboard (0.3): Order Status · Confidence · Expected
-            Delivery · Payment Status.
+            Buyer dashboard: Order Status · Confidence · Expected Delivery ·
+            Payment Status. Demo lots (2–5 tons) are illustrative aggregations,
+            not measured farm sizes. Supplier payouts simulated; PayPal Sandbox
+            only — no real money.
           </p>
         </section>
 

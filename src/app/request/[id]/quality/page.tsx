@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AgentLog, Shell, Stepper } from "@/components/ui";
+import { hubHeaders } from "@/lib/auth/hub-client";
 
 interface Row { id: string; allocated_kg: number; inspection_status: string; quality_grade: string | null; name: string; }
 
@@ -8,13 +9,15 @@ export default function QualityPage({ params }: { params: Promise<{ id: string }
   const [id, setId] = useState("");
   const [dealId, setDealId] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
-  const [buyerView, setBuyerView] = useState(false);
+  const [buyerView, setBuyerView] = useState(true);
   const [msg, setMsg] = useState("");
+  const [key, setKey] = useState("");
   const [forms, setForms] = useState<Record<string, { w: string; m: string; s: string; c: string }>>({});
 
   async function load(did: string) {
     const r = await fetch(`/api/quality?dealId=${did}`).then((x) => x.json());
     setRows(r.allocations ?? []);
+    if (r.error) setMsg(r.error);
   }
   useEffect(() => { params.then((x) => setId(x.id)); }, [params]);
   useEffect(() => {
@@ -22,9 +25,16 @@ export default function QualityPage({ params }: { params: Promise<{ id: string }
     fetch(`/api/requests/${id}`).then((r) => r.json()).then((d) => { if (d.deal) { setDealId(d.deal.id); load(d.deal.id); } });
   }, [id]);
 
+  function unlock() {
+    window.sessionStorage.setItem("fb_hub_key", key);
+    setBuyerView(false);
+    setMsg("Hub unlocked — inspection writes enabled.");
+    if (dealId) load(dealId);
+  }
+
   async function approveAll() {
     setMsg("Grading…");
-    const r = await fetch("/api/quality/approve-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dealId }) });
+    const r = await fetch("/api/quality/approve-all", { method: "POST", headers: { "Content-Type": "application/json", ...hubHeaders() }, body: JSON.stringify({ dealId }) });
     const d = await r.json();
     setMsg(r.ok ? `Accepted ${d.accepted} · Partial ${d.partial} · Rejected ${d.rejected}` : d.error);
     load(dealId);
@@ -32,7 +42,7 @@ export default function QualityPage({ params }: { params: Promise<{ id: string }
 
   async function gradeOne(aid: string) {
     const f = forms[aid] ?? { w: "", m: "", s: "", c: "Good" };
-    const r = await fetch("/api/quality", { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await fetch("/api/quality", { method: "POST", headers: { "Content-Type": "application/json", ...hubHeaders() },
       body: JSON.stringify({ allocationId: aid, weight_received_kg: f.w, moisture_pct: f.m, visual_score: f.s, condition: f.c }) });
     const d = await r.json();
     setMsg(r.ok ? `${d.decision}${d.grade ? ` · Grade ${d.grade}` : ""}` : d.error);
@@ -54,20 +64,26 @@ export default function QualityPage({ params }: { params: Promise<{ id: string }
     <Shell>
       <Stepper id={id} current="quality" />
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Quality Gate — Collection Hub</h1>
+        <h1 className="text-3xl font-bold">Quality — {buyerView ? "Accepted-Quantity Summary" : "Hub Inspection"}</h1>
         <button onClick={() => setBuyerView(!buyerView)} className="rounded-full border border-emerald-600 px-4 py-2 text-sm">
-          {buyerView ? "Hub view" : "Buyer view (?view=buyer)"}</button>
+          {buyerView ? "Hub sign-in" : "Buyer view"}</button>
       </div>
-      <p className="text-sm text-emerald-300">Delivered to FarmBroker Collection Hub (never to buyer). Inspection: Quantity · Quality · Condition · Moisture.</p>
+      <p className="text-sm text-emerald-300">Delivered to FarmBroker Collection Hub (never to buyer). Inspection: Quantity · Quality · Condition · Moisture. Thresholds are demo rules, not agronomic certification.</p>
+      {buyerView && (
+        <div className="flex gap-2 rounded-2xl bg-emerald-900/60 p-4">
+          <input type="password" placeholder="Hub key to grade (HUB_KEY)" value={key} onChange={(e) => setKey(e.target.value)} className="flex-1 rounded-lg bg-emerald-950 px-3 py-2" />
+          <button onClick={unlock} className="rounded-full bg-amber-400 px-5 py-2 font-bold text-emerald-950">Unlock</button>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-2xl bg-emerald-900/60 p-4">Accepted: <b className="text-amber-300">{counts.accepted}</b></div>
         <div className="rounded-2xl bg-emerald-900/60 p-4">Partial: <b className="text-amber-300">{counts.partial}</b></div>
         <div className="rounded-2xl bg-emerald-900/60 p-4">Rejected: <b className="text-amber-300">{counts.rejected}</b></div>
       </div>
       <div className="rounded-2xl border border-emerald-800 p-4 text-sm">
-        Risk = Supplier (before inspection) → Hub check → Risk = Platform (after). Accepted cargo: Inventory Protected · Platform Risk Active · Platform Responsibility for post-acceptance damage (simulated in MVP).
+        Risk = Supplier (before inspection) → Hub check → Risk = Platform (after, accepted qty only). Accepted cargo: Inventory Protected · Platform Risk Active · Platform Responsibility for post-acceptance damage (simulated in MVP).
       </div>
-      <button onClick={approveAll} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Approve All with Demo Values</button>
+      {!buyerView && <button onClick={approveAll} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Approve All with Demo Values</button>}
       <div className="grid gap-4">
         {rows.map((r) => (
           <div key={r.id} className="rounded-2xl bg-emerald-900/60 p-5">
@@ -90,7 +106,7 @@ export default function QualityPage({ params }: { params: Promise<{ id: string }
         ))}
       </div>
       {msg && <p className="text-amber-200">{msg}</p>}
-      <AgentLog lines={["Quality Agent: 4-field inspection per allocation.", "Quality Agent: ownership transfers to platform on pass."]} />
+      <AgentLog lines={["Quality Agent: 4-field inspection per allocation, append-only evidence.", "Quality Agent: responsibility transfers for accepted kg only."]} />
       {ready && <a href={`/request/${id}/settlement`} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Go to Settlement →</a>}
     </Shell>
   );

@@ -2,14 +2,13 @@
 import { useEffect, useState } from "react";
 import { AgentLog, Card, Shell, Stepper } from "@/components/ui";
 
-interface Lock { kg: number; name?: string; }
-interface Progress { target: number; covered: number; remaining: number; supplier_count?: number; locks?: Lock[]; }
+interface Progress { target: number; covered: number; remaining: number; supplier_count?: number; status?: string; }
 
 export default function ProcurePage({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState("");
   const [dealId, setDealId] = useState("");
   const [p, setP] = useState<Progress | null>(null);
-  const [shown, setShown] = useState(0);
+  const [ticks, setTicks] = useState<string[]>([]);
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -20,7 +19,7 @@ export default function ProcurePage({ params }: { params: Promise<{ id: string }
       if (d.deal) {
         setDealId(d.deal.id);
         fetch(`/api/procure?dealId=${d.deal.id}`).then((r) => r.json()).then((pg) => {
-          if (pg.covered !== undefined) { setP(pg); setShown(pg.locks?.length ?? pg.supplier_count ?? 0); }
+          if (pg.covered !== undefined) setP(pg);
         });
       }
     });
@@ -33,10 +32,13 @@ export default function ProcurePage({ params }: { params: Promise<{ id: string }
     setBusy(false);
     if (!res.ok) { setError(d.error ?? "Failed"); return; }
     setLog(d.log ?? []);
-    const locks: Lock[] = d.locks ?? [];
-    setP(d);
-    setShown(0);
-    locks.forEach((_, i) => setTimeout(() => setShown(i + 1), 800 * (i + 1)));
+    // Server already committed atomically; animate the recorded result only.
+    const final = Number(d.covered ?? 0);
+    setTicks([]);
+    [0.34, 0.67, 1].forEach((f, i) => setTimeout(() => {
+      setP({ ...d, covered: Math.round(final * f) });
+      setTicks((t) => [...t, `Batch ${i + 1}/3 committed ✅`]);
+    }, 800 * (i + 1)));
   }
 
   const pct = p && p.target ? Math.round((p.covered / p.target) * 100) : 0;
@@ -51,7 +53,7 @@ export default function ProcurePage({ params }: { params: Promise<{ id: string }
             <Card title="Target" big>{p.target.toLocaleString()}kg</Card>
             <Card title="Covered" big>{p.covered.toLocaleString()}kg</Card>
             <Card title="Remaining" big>{p.remaining.toLocaleString()}kg</Card>
-            <Card title="Suppliers" big>{p.supplier_count ?? p.locks?.length ?? 0}</Card>
+            <Card title="Suppliers" big>{p.supplier_count ?? 0}</Card>
           </div>
           <div className="h-4 overflow-hidden rounded-full bg-emerald-900">
             <div className="h-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
@@ -72,9 +74,9 @@ export default function ProcurePage({ params }: { params: Promise<{ id: string }
           {busy ? "Procuring…" : "Start AI Procurement"}</button>
       )}
       {error && <p className="text-red-300">{error}</p>}
-      {shown > 0 && p?.locks && (
+      {ticks.length > 0 && (
         <ul className="space-y-1 text-emerald-100">
-          {p.locks.slice(0, shown).map((l, i) => <li key={i}>Lock {i + 1}: {l.kg.toLocaleString()}kg secured ✅</li>)}
+          {ticks.map((t, i) => <li key={i}>{t}</li>)}
         </ul>
       )}
       <AgentLog lines={log} />

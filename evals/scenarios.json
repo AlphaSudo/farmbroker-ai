@@ -1,0 +1,38 @@
+// 1.8 scenario corpus (offline subset runs in evaluate.mts; provider/concurrency cases are live-only in smoke.mjs).
+// Areas: intent(8) supply(8) inspection(6) hostile(4) replay(4) = 30.
+{
+  "version": 1,
+  "cases": [
+    { "id": "intent-valid-mint", "area": "intent", "check": "demand valid Mint/10000/7 passes" },
+    { "id": "intent-arabic-crop", "area": "intent", "check": "crop 'نعناع' normalizes to Mint" },
+    { "id": "intent-zero-qty", "area": "intent", "check": "quantity 0 throws" },
+    { "id": "intent-bad-days", "area": "intent", "check": "delivery 45 throws (1-30 only)" },
+    { "id": "intent-empty-crop", "area": "intent", "check": "empty crop throws" },
+    { "id": "intent-bags-ambiguous", "area": "intent", "check": "IntentSchema accepts quantity_kg 0 only with clarifications" },
+    { "id": "intent-budget-null", "area": "intent", "check": "missing budget parses as null (clarify, never autocharge)" },
+    { "id": "intent-negative-price", "area": "intent", "check": "negative max_price rejected at request validation" },
+    { "id": "supply-7of10-short", "area": "supply", "check": "7000/10000 eligible → quotable false" },
+    { "id": "supply-all-late", "area": "supply", "check": "all lots past deadline → 0 eligible" },
+    { "id": "supply-wrong-crop", "area": "supply", "check": "Basil lots never enter a Mint quote" },
+    { "id": "supply-tight-budget", "area": "supply", "check": "max 7 vs quote 7.8 → over budget" },
+    { "id": "supply-no-supply", "area": "supply", "check": "Mango → confidence 0, not quotable" },
+    { "id": "supply-unknown-date", "area": "supply", "check": "null dates assumed on-time and counted" },
+    { "id": "supply-pool-isolation", "area": "supply", "check": "full-pool lots excluded from demo-pool eligibility" },
+    { "id": "supply-exact-cover", "area": "supply", "check": "10000/10000 eligible → quotable true" },
+    { "id": "inspect-grade-a", "area": "inspection", "check": "10/12%/5/Good → passed/A" },
+    { "id": "inspect-grade-b", "area": "inspection", "check": "moisture 15 → passed/B" },
+    { "id": "inspect-partial", "area": "inspection", "check": "80% weight → partial, usable = received" },
+    { "id": "inspect-fail-moisture", "area": "inspection", "check": "moisture 25 → failed, usable 0" },
+    { "id": "inspect-no-show", "area": "inspection", "check": "weight 0 → failed (valid failure input)" },
+    { "id": "inspect-negative", "area": "inspection", "check": "negative usable rejected (usable 0 via failed path)" },
+    { "id": "hostile-negative-qty", "area": "hostile", "check": "demandAgent rejects negative quantity" },
+    { "id": "hostile-malformed-model", "area": "hostile", "check": "SelectionSchema rejects invented candidate IDs" },
+    { "id": "hostile-unknown-lot", "area": "hostile", "check": "validatePlan flags unknown supplier lot" },
+    { "id": "hostile-supplier-leak", "area": "hostile", "check": "buyerSettlement output has no supplier_id/name keys" },
+    { "id": "replay-illegal-transition", "area": "replay", "check": "quoted→settled throws" },
+    { "id": "replay-money-rounding", "area": "replay", "check": "egpToUsdMinor deterministic; 7800000 minor → 162500 USD minor" },
+    { "id": "replay-refund-cap", "area": "replay", "check": "cumulative refunds cannot exceed capture (route guard)" },
+    { "id": "replay SAME-opkey", "area": "replay", "check": "opKeyOf prefers body key, then header, then UUID" }
+  ],
+  "liveOnly": ["provider-timeout-resume", "duplicate-webhook", "concurrent-reserve", "real-refund-proof", "ai-recovery-selection"]
+}

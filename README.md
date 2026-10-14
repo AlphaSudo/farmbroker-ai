@@ -6,6 +6,8 @@
 
 We sell **Guaranteed Supply**: buyer asks for 10 Tons Mint, the platform handles everything. NOT a marketplace — buyers never see suppliers, suppliers never see buyers.
 
+Proposed next iterations: [1.1-1.9 roadmap and implementation checklists](docs/roadmap/README.md), grounded in the [October 14 source review](docs/roadmap/project-review.md). The review distinguishes implemented behavior from unverified or incomplete MVP claims below.
+
 ## Run it
 
 ```bash
@@ -36,9 +38,23 @@ Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@bu
 - **PayPal Sandbox**: Orders v2 API (Create → Approve → Capture) + JS SDK buttons. Central: no payment → no procurement → no deal.
 - **AI (OpenRouter, free tier)**: primary `thinkingmachines/inkling:free`, fallback `nvidia/nemotron-3.5-lightning:free` — negotiation chat + regenerable analysis, same JSON schema as deterministic core with 8s timeout. Remove AI → no score/price/allocation/grade/split.
 
-## Kill test
+## Kill test (demonstrated checks)
 
-- PayPal removed → breaks? **YES.** - AI removed → breaks? **YES.**
+- Without PayPal confirmation, no procurement commits (verified-paid gate, 403 otherwise).
+- Without a valid AI decision, no new autonomous plan selection/recovery proceeds (runs stay paused; deterministic reads and explicitly labeled manual ops remain available).
+
+## Capability table
+
+| Area | Status |
+| --- | --- |
+| Live AI plan/intent/recovery selection (OpenRouter free tier, validated) | Live |
+| PayPal Sandbox create/approve/capture/verify/reconcile + full refund | Live (sandbox) |
+| Atomic paid reservations, idempotent operations, event timeline | Live |
+| Supply/inspection/handover data, settlement math | Simulated + labeled |
+| Supplier payouts | Calculated only (`Ready for PayPal Payout`), never sent |
+| Real payouts, carriers, insurers, logistics | Future (out of scope) |
+
+Full 1.1–1.9 program: `docs/roadmap/README.md` · evals: `npm run eval` · judge path: `docs/judge-guide.md` · submission: `docs/submission.md`.
 
 ## Submission
 

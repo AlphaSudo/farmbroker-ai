@@ -6,11 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval": "npx --yes tsx scripts/evaluate.mts",
+    "smoke": "node scripts/smoke.mjs",
+    "verify": "npx --yes tsx scripts/verify-math.mts"
   },
   "dependencies": {
     "@paypal/react-paypal-js": "^10.6.0",
     "@supabase/supabase-js": "^2.117.3",
+    "ag-grid-community": "^36.2.0",
+    "ag-grid-react": "^36.2.0",
     "next": "16.4.0",
     "pg": "^8.23.1",
     "react": "19.3.0",
