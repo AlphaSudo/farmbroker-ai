@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FarmBroker AI — autonomous procurement platform (PayPal AI Hackathon 2026)
 
-## Getting Started
+> FarmBroker AI is an autonomous procurement platform. A buyer submits a sourcing request. AI evaluates feasibility, prices the deal, collects payment, procures supply from multiple suppliers, manages quality control, settles suppliers, and delivers a completed supply chain transaction.
 
-First, run the development server:
+> "The buyer requested supply. The AI sourced it. The platform guaranteed it. PayPal secured the transaction."
+
+We sell **Guaranteed Supply**: buyer asks for 10 Tons Mint, the platform handles everything. NOT a marketplace — buyers never see suppliers, suppliers never see buyers.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # fill values (never commit)
+node scripts/migrate.mjs     # creates tables + demo seed (or paste supabase/migrations/001_schema.sql in Supabase SQL editor)
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Env (see `.env.example`): `PAYPAL_CLIENT_ID/SECRET/MODE/CURRENCY`, `NEXT_PUBLIC_PAYPAL_CLIENT_ID`, `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SECRET_KEY` (server-only), `AI_API_KEY/BASE_URL/MODEL_*`, `APP_URL`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Seed demo: Ahmed 2000kg/7.0 + Mohamed 3000kg/7.5 + Ali 5000kg/7.3 Mint, buyer Cairo Foods 10000kg/7d. Full 100-row dataset: Hub → Load button (`POST /api/hub/import`) or `node scripts/import-suppliers.mjs`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Flow (Money-first, GR#3)
 
-## Learn More
+Request → AI Analysis (92%) → Quote 78,000 → Accept → **PayPal Sandbox** → Payment Success → AI Procurement 10/10 → Hub inspection (Grade A/B, `Risk = Supplier → Risk = Platform`, Insured) → Settlement (`Inspection Passed → Payment Released`, `Ready for PayPal Payout`) → Completed.
 
-To learn more about Next.js, take a look at the following resources:
+Locked demo math: floor 73,000 → clearing 7.5/kg → quote 7.8/kg → total **78,000**, pool 75,000, margin **3,000**, split **15,000 / 22,500 / 37,500**. PayPal charged in USD at fixed demo rate 48 EGP/USD (1,625.00 USD) — sandbox has no EGP. Verify: `npx tsx scripts/verify-math.mts` → `LOCKED-MATH-OK`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Buyer lane (`/request/**`: aggregates only) vs Hub lane (`/hub/**`: internal ops). 6 agents in `src/lib/agents/`: Demand, Risk, Pricing, Procurement (paid-only, 403 otherwise), Quality (Approved/Partial/Rejected), Finance (PayPal + settlement + margin). API in `src/app/api/`. Details: `docs/` (system, user-flow, database-schema, agent, api, stories, pitch).
 
-## Deploy on Vercel
+Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@business.example.com` (payee = platform), personal `sb-*@personal.example.com` (buyer). No real money moves; supplier payouts are calculated, not sent (PayPal Payouts = post-hackathon).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tools used
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **PayPal Sandbox**: Orders v2 API (Create → Approve → Capture) + JS SDK buttons. Central: no payment → no procurement → no deal.
+- **AI (OpenRouter, free tier)**: primary `thinkingmachines/inkling:free`, fallback `nvidia/nemotron-3.5-lightning:free` — negotiation chat + regenerable analysis, same JSON schema as deterministic core with 8s timeout. Remove AI → no score/price/allocation/grade/split.
+
+## Kill test
+
+- PayPal removed → breaks? **YES.** - AI removed → breaks? **YES.**
+
+## Submission
+
+- Demo video (<3min, public YouTube): TODO_LINK
+- Live demo: https://farmbroker-aii.vercel.app
+- Last sandbox capture ID (proof): TODO_CAPTURE_ID
+- License: MIT.
