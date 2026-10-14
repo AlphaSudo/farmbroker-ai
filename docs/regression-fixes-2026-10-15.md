@@ -30,7 +30,7 @@ Migrations `008`, `009`, and `010` were applied to the configured Supabase proje
 | Local HTTP/provider harness | 57 passed, 0 failed, 6 provider-blocked scenarios |
 | TypeScript / ESLint / production build | Passed |
 | Locked baseline arithmetic | 78,000 EGP total / 75,000 supplier entitlement / 3,000 gross spread preserved |
-| Vercel production verification | Recorded after deployment in the sibling deployment-evidence directory |
+| Vercel production verification | **57 passed, 0 failed, 6 provider-blocked scenarios** on deployment `FCLLffwWPnBfPBLJPHRmR72Qt4jd` / code commit `6f9a8c6` |
 
 Database integration tests use explicitly labeled provider stubs **inside one uncommitted transaction**, then roll everything back. They prove database guards and state transitions, including reject 2T → replace → inspect → settle → handover and pending → completed refund replay. They do not prove real provider payment or the full browser checkout callback.
 
@@ -38,7 +38,11 @@ The HTTP harness creates named unpaid requests, isolated scenarios, and unapprov
 
 ## Remaining external gate
 
-The originally approved PayPal Sandbox order returned `COMPLIANCE_VIOLATION` on capture. Its actual capture/refund journey must pass before the hackathon financial demo is called ready. Application guards continue to require verified provider capture. `PAYPAL_WEBHOOK_ID` is intentionally unset until a webhook is registered; its route returns 503.
+The originally approved PayPal Sandbox order returned `COMPLIANCE_VIOLATION` again after the fixes were deployed. The corrected application returned HTTP **422** with the provider issue, and the deal remained `quoted` with no capture ID or verified payment. Its actual capture/refund journey must pass before the hackathon financial demo is called ready. Application guards continue to require verified provider capture. `PAYPAL_WEBHOOK_ID` is intentionally unset until a webhook is registered; its route returns 503.
+
+The Hub queue now provides **Create Happy path / Recovery / Refund scenario** controls. They create fresh, browser-owned unpaid requests using the tested fixture API, so the next payment rehearsal can start with the required backup stock already present.
+
+Retained corrected-run evidence: `2026-10-15-production-fixed.json`, `2026-10-15-production-capture-fixed.json`, `2026-10-15-domain-regressions-fixed.json`, and `2026-10-15-database-regressions-fixed.json` in `pal/deployment-evidence/`. Earlier failure evidence is retained separately.
 
 ## Reproduction
 

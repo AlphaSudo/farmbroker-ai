@@ -9,6 +9,19 @@ export default function HubOrders() {
   const [unlocked, setUnlocked] = useState(() => typeof window !== "undefined" && !!window.sessionStorage.getItem("fb_hub_key"));
   const [q, setQ] = useState<{ pendingInspections: number; shortDeals: unknown[]; incidents: Array<{ id: string; deal_id: string; missing_kg: number; status: string }>; refunds: Array<{ id: string; deal_id: string; status: string }>; deals: Deal[] } | null>(null);
   const [msg, setMsg] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [fixture, setFixture] = useState<{ id: string; scenario: string } | null>(null);
+
+  async function createFixture(scenario: string) {
+    setCreating(true); setMsg("");
+    try {
+      const response = await fetch("/api/hub/fixtures", { method: "POST", headers: { "Content-Type": "application/json", ...hubHeaders() }, body: JSON.stringify({ scenario }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not create scenario");
+      setFixture({ id: result.request.id, scenario });
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Could not create scenario"); }
+    finally { setCreating(false); }
+  }
 
   async function load(k?: string) {
     const r = await fetch("/api/hub/queue", { headers: k ? { "x-hub-key": k } : hubHeaders() }).then((x) => x.json());
@@ -39,6 +52,16 @@ export default function HubOrders() {
         {msg && <p className="text-amber-200">{msg}</p>}
         {q && (
           <>
+            <div className="rounded-2xl border border-emerald-800 p-4">
+              <h2 className="font-bold">Test scenarios</h2>
+              <p className="mt-1 text-sm text-emerald-300">Each order starts unpaid with its own stock. Recovery includes 2,000kg standby supply; refund has no backup.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {([['happy-path', 'Happy path'], ['recovery', 'Recovery'], ['refund', 'Refund']] as const).map(([scenario, label]) => (
+                  <button key={scenario} disabled={creating} onClick={() => createFixture(scenario)} className="rounded-full border border-emerald-600 px-4 py-2 text-sm disabled:opacity-50">Create {label} scenario</button>
+                ))}
+              </div>
+              {fixture && <a className="mt-3 inline-block text-amber-300" href={`/request/${fixture.id}`}>Open {fixture.scenario} test order →</a>}
+            </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="rounded-2xl bg-emerald-900/60 p-4">Pending inspections: <b className="text-amber-300">{q.pendingInspections}</b></div>
               <div className="rounded-2xl bg-emerald-900/60 p-4">Short orders: <b className="text-amber-300">{q.shortDeals.length}</b></div>

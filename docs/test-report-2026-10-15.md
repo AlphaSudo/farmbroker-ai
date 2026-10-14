@@ -1,5 +1,7 @@
 # FarmBroker AI test results: October 15, 2026
 
+> Historical baseline before corrections. For the implemented fixes and current validation, see [the correction report](regression-fixes-2026-10-15.md).
+
 **Release gate: failed.** The code builds, but the deployed 1.x workflow has confirmed defects and could not complete a paid fulfillment/refund journey.
 
 Target: `https://farmbroker-aii.vercel.app`. Deployed application commit: `0175cc7801976648a72a104fd3758b2e76010a79`. Deployment: `GyHoxwGXfDbXM3ibvTmZSN32Qh6U`. This testing session added test scripts and this report; application behavior/configuration was not patched to hide failures.
