@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
-import { qualityAgent } from "@/lib/agents/quality";
-import { recordEvent } from "@/lib/domain/events";
+import { inspectLot } from "@/lib/domain/inspections";
 import { loadRequest, assertBuyer, opKeyOf } from "@/lib/auth/guard";
 import { hubAuthorized } from "@/lib/auth/actor";
 import { json, err, statusOf } from "@/lib/http";
@@ -47,21 +46,9 @@ export async function POST(req: Request) {
     if (!hubAuthorized(req)) return err("Hub access required", 403);
     const parsed = Grade.safeParse(await req.json());
     if (!parsed.success) return err(parsed.error.issues[0]?.message ?? "Invalid inspection input");
-    const sb = supabase();
-    const { data: alloc, error } = await sb.from("allocations").select("*").eq("id", parsed.data.allocationId).single();
-    if (error || !alloc) return err("Allocation not found", 404);
-    const a = alloc as { allocated_kg: number; deal_id: string; attempt?: number };
-    const d = qualityAgent({ allocated_kg: num(a.allocated_kg), weight_received_kg: parsed.data.weight_received_kg, moisture_pct: parsed.data.moisture_pct, visual_score: parsed.data.visual_score, condition: parsed.data.condition });
-    const opKey = opKeyOf(req, parsed.data);
-    const { error: iErr } = await sb.from("inspections").insert({
-      allocation_id: a === null ? "" : parsed.data.allocationId, attempt: (a.attempt ?? 1),
-      weight_received_kg: parsed.data.weight_received_kg, usable_kg: d.usable_kg, moisture_pct: parsed.data.moisture_pct,
-      visual_score: parsed.data.visual_score, condition: parsed.data.condition, decision: d.decision, grade: d.grade, op_key: opKey,
-    });
-    if (iErr && !/duplicate|unique/i.test(iErr.message)) throw iErr;
-    await sb.from("allocations").update({ inspection_status: d.decision, quality_grade: d.grade, usable_kg: d.usable_kg, weight_received_kg: parsed.data.weight_received_kg, moisture_pct: parsed.data.moisture_pct, visual_score: parsed.data.visual_score, condition: parsed.data.condition }).eq("id", parsed.data.allocationId);
-    await recordEvent(a.deal_id, "lot_inspected", { allocation: parsed.data.allocationId, decision: d.decision, grade: d.grade, usable_kg: d.usable_kg }, `${opKey}:event`);
-    return json({ decision: d.decision, grade: d.grade, usable_kg: d.usable_kg, reasons: d.reasons });
+    const { allocationId, opKey: ignored, ...input } = parsed.data;
+    void ignored;
+    return json(await inspectLot(allocationId, input, opKeyOf(req, parsed.data)));
   } catch (e) {
     return err(e instanceof Error ? e.message : "Grading failed", statusOf(e));
   }

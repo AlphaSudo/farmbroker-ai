@@ -3,18 +3,19 @@
 // margin = total − Σpayouts. Assert exact. Seed: 15,000/22,500/37,500 + 3,000.
 import type { Allocation, Deal, Payout, Settlement } from "../types";
 import { num } from "../types";
+import { acceptedKg } from "../domain/coverage";
 
 export function financeAgent(deal: Deal, allocations: Allocation[]): Settlement {
   const clearing = num(deal.clearing_per_kg);
   const payouts: Payout[] = allocations.map((a) => {
-    const kg = a.inspection_status === "passed" ? num(a.allocated_kg) : a.inspection_status === "partial" ? num(a.usable_kg ?? 0) : 0;
+    const kg = acceptedKg(a);
     return {
       supplier_id: a.supplier_id,
       supplier_name: a.supplier?.name ?? "Supplier",
       kg,
       amount: Math.round(kg * clearing),
       grade: a.quality_grade,
-      status: a.inspection_status === "failed" ? "Excluded (failed inspection)" : "Inspection Passed → Payment Released",
+      status: a.inspection_status === "failed" ? "Excluded (failed inspection)" : "Calculated (simulated payout)",
     };
   });
   const paid = payouts.reduce((s, p) => s + p.amount, 0);

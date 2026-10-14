@@ -35,17 +35,17 @@ export async function createOrder(dealId: string, totalEgp: number, requestId?: 
       purchase_units: [{ custom_id: dealId, description: "FarmBroker AI guaranteed supply", amount: { currency_code: "USD", value: egpToUsd(totalEgp) } }],
     }),
   });
-  if (!res.ok) throw new Error(`PayPal create-order failed (${res.status})`);
+  if (!res.ok) await providerError(res, "create-order");
   return (await res.json()) as { id: string };
 }
 
-export async function captureOrder(orderId: string) {
+export async function captureOrder(orderId: string, requestId?: string) {
   const access = await getAccessToken();
   const res = await fetch(`${BASE}/v2/checkout/orders/${orderId}/capture`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json", ...(requestId ? { "PayPal-Request-Id": requestId } : {}) },
   });
-  if (!res.ok) throw new Error(`PayPal capture failed (${res.status})`);
+  if (!res.ok) await providerError(res, "capture");
   const data = (await res.json()) as { id: string; purchase_units?: Array<{ payments?: { captures?: Array<{ id: string }> } }> };
   const captureId = data.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? "";
   return { orderId: data.id, captureId };
@@ -54,12 +54,12 @@ export async function captureOrder(orderId: string) {
 export interface VerifiedCapture { ok: boolean; captureId: string; status: string; amount: string; currency: string; payeeEmail: string; reason?: string; }
 
 // Full binding check: COMPLETED + amount + currency + platform payee (1.1/1.5).
-export async function verifyCapture(orderId: string, expectedUsd: string, merchantEmail: string): Promise<VerifiedCapture> {
+export async function verifyCapture(orderId: string, expectedUsd: string, merchantEmail: string, expectedDealId?: string): Promise<VerifiedCapture> {
   const access = await getAccessToken();
   const res = await fetch(`${BASE}/v2/checkout/orders/${orderId}`, { headers: { Authorization: `Bearer ${access}` } });
   if (!res.ok) return { ok: false, captureId: "", status: "", amount: "", currency: "", payeeEmail: "", reason: `order lookup failed (${res.status})` };
   const o = (await res.json()) as {
-    status: string; purchase_units: Array<{ amount: { currency_code: string; value: string }; payee?: { email_address?: string }; payments?: { captures?: Array<{ id: string; status: string; amount: { value: string; currency_code: string } }> } }>;
+    status: string; purchase_units: Array<{ custom_id?: string; amount: { currency_code: string; value: string }; payee?: { email_address?: string }; payments?: { captures?: Array<{ id: string; status: string; amount: { value: string; currency_code: string } }> } }>;
   };
   const pu = o.purchase_units?.[0];
   const cap = pu?.payments?.captures?.[0];
@@ -67,7 +67,8 @@ export async function verifyCapture(orderId: string, expectedUsd: string, mercha
   if (!cap) return { ok: false, captureId: "", status: o.status, amount: "", currency: "", payeeEmail, reason: "no capture on order" };
   if (cap.status !== "COMPLETED") return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: `capture status ${cap.status}` };
   if (cap.amount.value !== expectedUsd || cap.amount.currency_code !== "USD") return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: "amount/currency mismatch" };
-  if (merchantEmail && payeeEmail && payeeEmail.toLowerCase() !== merchantEmail.toLowerCase()) return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: "payee mismatch" };
+  if (!merchantEmail || !payeeEmail || payeeEmail.toLowerCase() !== merchantEmail.toLowerCase()) return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: "payee mismatch" };
+  if (expectedDealId && pu.custom_id !== expectedDealId) return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: "deal binding mismatch" };
   return { ok: true, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail };
 }
 
@@ -81,7 +82,7 @@ export async function refundCapture(captureId: string, usdValue: string, request
     },
     body: JSON.stringify({ amount: { currency_code: "USD", value: usdValue } }),
   });
-  if (!res.ok) throw new Error(`PayPal refund failed (${res.status})`);
+  if (!res.ok) await providerError(res, "refund");
   return (await res.json()) as { id: string; status: string };
 }
 
@@ -90,4 +91,11 @@ export async function getRefund(refundId: string) {
   const res = await fetch(`${BASE}/v2/payments/refunds/${refundId}`, { headers: { Authorization: `Bearer ${access}` } });
   if (!res.ok) throw new Error(`Refund lookup failed (${res.status})`);
   return (await res.json()) as { id: string; status: string };
+}
+
+async function providerError(res: Response, operation: string): Promise<never> {
+  const body = await res.json().catch(() => ({})) as { details?: Array<{ issue?: string }>; debug_id?: string };
+  const issue = body.details?.[0]?.issue ?? "PROVIDER_ERROR";
+  console.warn("PayPal operation rejected", { operation, status: res.status, issue, debugId: body.debug_id });
+  throw Object.assign(new Error(`PayPal ${operation}: ${issue}. ${issue === "COMPLIANCE_VIOLATION" ? "The sandbox account requires PayPal review; payment has not been verified." : "Retry or reconcile the existing attempt."}`), { status: res.status >= 500 ? 502 : 422 });
 }

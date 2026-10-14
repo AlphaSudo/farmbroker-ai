@@ -1,10 +1,10 @@
 import { supabase } from "@/lib/supabase";
-import { refundCapture, getRefund } from "@/lib/paypal";
+import { refundCapture } from "@/lib/paypal";
 import { recordEvent } from "@/lib/domain/events";
-import { loadRequest, assertBuyer, opKeyOf } from "@/lib/auth/guard";
+import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { hubAuthorized } from "@/lib/auth/actor";
 import { json, err, statusOf } from "@/lib/http";
-import { num } from "@/lib/types";
+import { refundAmount, saveProviderRefund } from "@/lib/domain/refunds";
 
 async function withDeal(dealId: string) {
   const sb = supabase();
@@ -33,45 +33,22 @@ export async function POST(req: Request) {
     if (!hubAuthorized(req)) return err("Hub access required", 403);
     const body = (await req.json()) as { dealId?: string; reason?: string; opKey?: string };
     if (!body.dealId || !body.reason?.trim()) return err("dealId + reason required");
-    const opKey = opKeyOf(req, body);
     const { sb, deal } = await withDeal(body.dealId);
     if (!deal.paypal_capture_id) return err("No capture to refund.", 422);
-    const { data: dup } = await sb.from("refunds").select("id,status").eq("op_key", opKey).maybeSingle();
-    if (dup) return json({ refund: dup, replayed: true });
-    const { data: prior } = await sb.from("refunds").select("id").eq("deal_id", body.dealId).in("status", ["requested", "pending", "completed"]);
-    if (prior && prior.length > 0) return err("A refund is already in flight/completed for this capture (cap enforced).", 409);
-    const { data: incident } = await sb.from("shortage_incidents").select("status").eq("deal_id", body.dealId).in("status", ["refund_eligible"]).limit(1).maybeSingle();
-    const eligible = !!incident || ["short"].includes(deal.status);
-    if (!eligible) return err("Refund policy: only unresolved-shortage or Hub-reviewed orders qualify.", 422);
-    const usd = (num(deal.total_price) / 48).toFixed(2);
-    const { data: row, error } = await sb.from("refunds").insert({
-      deal_id: body.dealId, capture_id: deal.paypal_capture_id, usd_minor: Math.round(Number(usd) * 100),
-      status: "requested", reason: body.reason.trim(), policy_version: "v1", op_key: opKey,
-    }).select("*").single();
-    if (error) {
-      if (/duplicate|unique/i.test(error.message)) {
-        const { data: r2 } = await sb.from("refunds").select("*").eq("op_key", opKey).single();
-        return json({ refund: r2, replayed: true });
-      }
-      throw error;
-    }
-    const r = row as { id: string };
+    const claim = await sb.rpc("claim_full_refund", { p_deal: body.dealId, p_reason: body.reason.trim() });
+    if (claim.error) return err(claim.error.message, 422);
+    const { claimed, refund } = claim.data;
+    if (!claimed) return json({ refund, replayed: true });
     try {
-      const pr = await refundCapture(deal.paypal_capture_id, usd, opKey);
-      await sb.from("refunds").update({ status: pr.status === "COMPLETED" ? "completed" : "pending", provider_refund_id: pr.id }).eq("id", r.id);
-      await sb.from("ledger_entries").insert({ deal_id: body.dealId, kind: "refund", usd_minor: Math.round(Number(usd) * 100), note: `Sandbox refund ${pr.id}` });
-      if (pr.status === "COMPLETED") {
-        await sb.from("deals").update({ outcome: "refunded" }).eq("id", body.dealId);
-        await sb.from("shortage_incidents").update({ status: "refunded" }).eq("deal_id", body.dealId).in("status", ["refund_eligible", "open", "recovering"]);
-        await recordEvent(body.dealId, "refunded", { refundId: pr.id }, `${opKey}:event`);
-      }
-    } catch (pe) {
-      await sb.from("refunds").update({ status: "needs_review" }).eq("id", r.id);
-      await recordEvent(body.dealId, "refund_needs_review", { error: String(pe) }, `${opKey}:event`);
+      const amount = refundAmount(Number(refund.usd_minor));
+      const provider = await refundCapture(refund.capture_id, (amount / 100).toFixed(2), refund.op_key);
+      return json({ refund: await saveProviderRefund(refund.id, provider) });
+    } catch (e) {
+      const saved = await sb.from("refunds").update({ status: "needs_review", lease_until: null }).eq("id", refund.id).neq("status", "completed");
+      if (saved.error) throw saved.error;
+      await recordEvent(body.dealId, "refund_needs_review", { reason: "Provider result requires reconciliation." }, `review:${refund.id}`);
+      return err(e instanceof Error ? e.message : "Refund requires reconciliation", 502);
     }
-    const { data: final } = await sb.from("refunds").select("*").eq("id", r.id).single();
-    void getRefund;
-    return json({ refund: final });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Refund failed", statusOf(e));
   }

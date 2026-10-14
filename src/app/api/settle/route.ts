@@ -1,12 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import { financeAgent } from "@/lib/agents/finance";
-import { assertTransition } from "@/lib/domain/transitions";
-import { recordEvent } from "@/lib/domain/events";
-import { loadRequest, assertBuyer, opKeyOf } from "@/lib/auth/guard";
+import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { buyerSettlement } from "@/lib/serializers/buyer";
 import { json, err, statusOf } from "@/lib/http";
 import type { Allocation, Deal } from "@/lib/types";
 import { num } from "@/lib/types";
+import { acceptedKg as acceptedLotKg } from "@/lib/domain/coverage";
 
 async function graded(dealId: string) {
   const sb = supabase();
@@ -17,8 +16,7 @@ async function graded(dealId: string) {
   return { deal: deal as unknown as Deal & { request_id: string }, list: (allocs ?? []) as unknown as Allocation[] };
 }
 
-const acceptedKg = (list: Allocation[]): number =>
-  list.reduce((s, a) => s + (a.inspection_status === "passed" ? num(a.allocated_kg) : a.inspection_status === "partial" ? Math.min(num(a.usable_kg ?? 0), num(a.allocated_kg)) : 0), 0);
+const acceptedKg = (list: Allocation[]): number => list.reduce((sum, a) => sum + acceptedLotKg(a), 0);
 
 // GET ?dealId= → READ-ONLY preview. Never mutates (1.1).
 export async function GET(req: Request) {
@@ -53,16 +51,11 @@ export async function POST(req: Request) {
     if (accepted < num(request.quantity_kg)) {
       return err(`Unresolved shortage: ${accepted.toLocaleString()}/${num(request.quantity_kg).toLocaleString()}kg accepted. Recovery or refund required — this order cannot complete.`, 403);
     }
-    if (!["procuring", "covered"].includes(deal.status)) return err(`Deal is ${deal.status}`, 409);
+    if (!["procuring", "covered", "short", "settled"].includes(deal.status)) return err(`Deal is ${deal.status}`, 409);
     const settlement = financeAgent(deal, list);
     const sb = supabase();
-    for (const p of settlement.payouts) {
-      await sb.from("allocations").update({ payout_status: "calculated" }).eq("deal_id", body.dealId).eq("supplier_id", p.supplier_id);
-    }
-    assertTransition("deals", deal.status, "settled");
-    await sb.from("deals").update({ status: "settled", outcome: "pending" }).eq("id", body.dealId).eq("status", deal.status);
-    await sb.from("buyer_requests").update({ status: "settled" }).eq("id", deal.request_id);
-    await recordEvent(body.dealId, "settlement_calculated", { total: settlement.total, margin: settlement.margin, accepted_kg: accepted }, opKeyOf(req, body));
+    const completed = await sb.rpc("complete_deal_phase", { p_deal: body.dealId, p_phase: "settle" });
+    if (completed.error) return err(completed.error.message, 409);
     return json(buyerSettlement(settlement));
   } catch (e) {
     return err(e instanceof Error ? e.message : "Settle failed", statusOf(e));

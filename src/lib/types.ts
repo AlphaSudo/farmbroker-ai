@@ -5,6 +5,7 @@ export interface Supplier {
   id: string; name: string; crop: string; quantity_kg: number;
   min_price: number; available_date: string | null; location: string | null;
   quality_score: number | null; pool: Pool;
+  fixture_id?: string | null; backup_only?: boolean; quarantined?: boolean;
 }
 
 export interface Analysis {

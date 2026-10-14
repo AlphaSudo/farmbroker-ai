@@ -3,11 +3,15 @@ import { supabase } from "../supabase";
 
 export async function recordEvent(dealId: string, type: string, payload: object, opKey?: string): Promise<{ replayed: boolean }> {
   if (!opKey) {
-    await supabase().from("deal_events").insert({ deal_id: dealId, type, payload });
+    const result = await supabase().from("deal_events").insert({ deal_id: dealId, type, payload });
+    if (result.error) throw result.error;
     return { replayed: false };
   }
-  const { data } = await supabase().from("deal_events").select("id").eq("op_key", opKey).maybeSingle();
-  if (data) return { replayed: true };
+  const { data } = await supabase().from("deal_events").select("id,deal_id,type").eq("op_key", opKey).maybeSingle();
+  if (data) {
+    if (data.deal_id !== dealId || data.type !== type) throw Object.assign(new Error("Idempotency key reused for another operation."), { status: 409 });
+    return { replayed: true };
+  }
   const { error } = await supabase().from("deal_events").insert({ deal_id: dealId, type, payload, op_key: opKey });
   if (error && /duplicate|unique/i.test(error.message)) return { replayed: true };
   if (error) throw error;

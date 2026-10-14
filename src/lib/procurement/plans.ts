@@ -27,15 +27,20 @@ export function candidatePlans(eligible: Supplier[], targetKg: number): Plan[] {
 export function validatePlan(plan: Plan, eligible: Supplier[], targetKg: number, maxTotal: number): string[] {
   const errors: string[] = [];
   const ids = new Set(eligible.map((s) => s.id));
+  const seen = new Set<string>();
   let kg = 0, cost = 0;
   for (const i of plan.items) {
     const s = eligible.find((x) => x.id === i.supplier_id);
     if (!s) { errors.push(`unknown lot ${i.supplier_id.slice(0, 8)}`); continue; }
     if (!ids.has(i.supplier_id)) errors.push("ineligible lot");
-    if (i.kg <= 0 || i.kg > num(s.quantity_kg)) errors.push(`quantity out of bounds for ${s.name}`);
+    if (seen.has(i.supplier_id)) errors.push("duplicate supplier lot");
+    seen.add(i.supplier_id);
+    if (!Number.isSafeInteger(i.kg) || i.kg <= 0 || i.kg > num(s.quantity_kg)) errors.push(`quantity out of bounds for ${s.name}`);
+    if (!Number.isFinite(i.rate) || i.rate <= 0 || i.rate < num(s.min_price)) errors.push(`rate below floor for ${s.name}`);
     kg += i.kg; cost += i.kg * i.rate;
   }
   if (kg !== targetKg) errors.push(`covers ${kg}, target ${targetKg}`);
-  if (cost > maxTotal) errors.push(`cost ${cost} over budget ${maxTotal}`);
+  if (!Number.isFinite(cost) || cost > maxTotal) errors.push(`cost ${cost} over budget ${maxTotal}`);
+  if (plan.total_kg !== kg || Math.abs(plan.cost_total - cost) > 0.001) errors.push("declared plan totals do not match items");
   return errors;
 }

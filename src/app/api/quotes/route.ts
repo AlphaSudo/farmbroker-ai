@@ -1,11 +1,10 @@
-import { supabase } from "@/lib/supabase";
 import { pricingAgent } from "@/lib/agents/pricing";
 import { riskAgent } from "@/lib/agents/risk";
-import { eligibleSuppliers, eligibleKg } from "@/lib/domain/eligibility";
+import { eligibleKg } from "@/lib/domain/eligibility";
 import { createRevision } from "@/lib/domain/revisions";
 import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { json, err, statusOf } from "@/lib/http";
-import type { Supplier } from "@/lib/types";
+import { availableSupply } from "@/lib/domain/supply";
 import { num } from "@/lib/types";
 
 // POST { requestId } → validated draft revision (30-min expiry, supply snapshot). Nonbinding until accepted.
@@ -15,10 +14,7 @@ export async function POST(req: Request) {
     if (!requestId) return err("requestId required");
     const request = await loadRequest(requestId);
     await assertBuyer(req, request);
-    const { data: suppliers } = await supabase().from("suppliers").select("*").eq("pool", request.pool);
-    const sel = eligibleSuppliers((suppliers ?? []) as Supplier[], {
-      crop: request.crop, pool: request.pool, delivery_days: request.delivery_days, requested_at: request.created_at,
-    });
+    const sel = await availableSupply(request);
     if (eligibleKg(sel) < request.quantity_kg) return err("Insufficient eligible supply — no revision.", 422);
     const quote = pricingAgent(request, riskAgent(request, sel.eligible), sel.eligible);
     if (!quote.quotable || quote.per_kg > num(request.max_price)) return err("Over budget or not quotable.", 422);

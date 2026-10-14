@@ -14,6 +14,7 @@ export async function GET(req: Request) {
       sb.from("refunds").select("id,deal_id,status").in("status", ["requested", "pending", "needs_review"]),
       sb.from("deals").select("id,status,outcome,total_price,created_at").order("created_at", { ascending: false }).limit(50),
     ]);
+    for (const result of [insp, shorts, incs, refs, deals]) if (result.error) throw result.error;
     return json({
       pendingInspections: insp.count ?? 0,
       shortDeals: shorts.data ?? [],

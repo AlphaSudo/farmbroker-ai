@@ -1,10 +1,9 @@
-import { supabase } from "@/lib/supabase";
 import { pricingAgent } from "@/lib/agents/pricing";
 import { riskAgent } from "@/lib/agents/risk";
-import { eligibleSuppliers, eligibleKg } from "@/lib/domain/eligibility";
+import { eligibleKg } from "@/lib/domain/eligibility";
 import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { json, err, statusOf } from "@/lib/http";
-import type { Supplier } from "@/lib/types";
+import { availableSupply } from "@/lib/domain/supply";
 import { num } from "@/lib/types";
 
 // POST { requestId } → quote preview (no persistence). Priced from the ELIGIBLE set only.
@@ -12,13 +11,9 @@ export async function POST(req: Request) {
   try {
     const { requestId } = (await req.json()) as { requestId?: string };
     if (!requestId) return err("requestId required");
-    const sb = supabase();
     const request = await loadRequest(requestId);
     await assertBuyer(req, request);
-    const { data: suppliers } = await sb.from("suppliers").select("*").eq("pool", request.pool);
-    const sel = eligibleSuppliers((suppliers ?? []) as Supplier[], {
-      crop: request.crop, pool: request.pool, delivery_days: request.delivery_days, requested_at: request.created_at,
-    });
+    const sel = await availableSupply(request);
     const analysis = riskAgent(request, sel.eligible);
     if (eligibleKg(sel) < request.quantity_kg) {
       return json({ quote: { ...pricingAgent(request, analysis, sel.eligible), quotable: false, reason: "Insufficient eligible on-time supply — no guaranteed quote." }, log: ["Pricing Agent: blocked — coverage shortfall."] });

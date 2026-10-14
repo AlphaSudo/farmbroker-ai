@@ -1,9 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import { riskAgent } from "@/lib/agents/risk";
-import { eligibleSuppliers, eligibleKg } from "@/lib/domain/eligibility";
+import { eligibleKg } from "@/lib/domain/eligibility";
 import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { json, err, statusOf } from "@/lib/http";
-import type { Supplier } from "@/lib/types";
+import { availableSupply } from "@/lib/domain/supply";
 
 // POST { requestId } → Demand + Risk over the request's PERSISTED pool/scenario.
 // Hard feasibility: eligible on-time kg must cover the target, else not quotable.
@@ -14,11 +14,7 @@ export async function POST(req: Request) {
     const sb = supabase();
     const request = await loadRequest(requestId);
     await assertBuyer(req, request);
-    const { data: suppliers, error: sErr } = await sb.from("suppliers").select("*").eq("pool", request.pool);
-    if (sErr) throw sErr;
-    const sel = eligibleSuppliers((suppliers ?? []) as Supplier[], {
-      crop: request.crop, pool: request.pool, delivery_days: request.delivery_days, requested_at: request.created_at,
-    });
+    const sel = await availableSupply(request);
     const analysis = riskAgent(request, sel.eligible);
     if (eligibleKg(sel) < request.quantity_kg) {
       analysis.quotable = false;

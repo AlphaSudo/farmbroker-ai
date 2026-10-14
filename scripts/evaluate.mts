@@ -8,6 +8,9 @@ import { SelectionSchema, IntentSchema } from "../src/lib/ai/schemas";
 import { validatePlan } from "../src/lib/procurement/plans";
 import { buyerSettlement } from "../src/lib/serializers/buyer";
 import { assertTransition } from "../src/lib/domain/transitions";
+import { refundAmount } from "../src/lib/domain/refunds";
+import { opKeyOf } from "../src/lib/auth/guard";
+import { pricingAgent } from "../src/lib/agents/pricing";
 import { egpToUsdMinor } from "../src/lib/money";
 import type { Supplier } from "../src/lib/types";
 
@@ -39,7 +42,7 @@ const elig = (sup: Supplier[], qty: number, days = 7) => eligibleSuppliers(sup, 
 t("supply-7of10-short", eligibleKg(elig([S({ quantity_kg: 7000 })], 10000)) < 10000);
 t("supply-all-late", elig([S({ available_date: new Date(Date.now() + 30 * 864e5).toISOString() })], 100).eligible.length === 0);
 t("supply-wrong-crop", elig([S({ crop: "Basil", quantity_kg: 99999 })], 100).eligible.length === 0);
-t("supply-tight-budget", 7.8 > 7);
+t("supply-tight-budget", pricingAgent({ quantity_kg: 10000, delivery_days: 7 }, { quotable: true, confidence: 92 }, demo3).per_kg > 7);
 t("supply-no-supply", riskAgent({ crop: "Mango", quantity_kg: 100, delivery_days: 7 }, []).confidence === 0);
 t("supply-unknown-date", elig([S({ available_date: null })], 100).assumedOnTime === 1);
 t("supply-pool-isolation", elig([S({ pool: "full", quantity_kg: 99999 })], 100).eligible.length === 0);
@@ -69,8 +72,8 @@ t("hostile-supplier-leak", (() => {
 // replay (4)
 t("replay-illegal-transition", (() => { try { assertTransition("deals", "quoted", "settled"); return false; } catch { return true; } })());
 t("replay-money-rounding", egpToUsdMinor(7800000) === 162500);
-t("replay-refund-cap", true); // enforced in /api/refunds (live): single active refund per capture
-t("replay SAME-opkey", true); // opKeyOf: body → header → UUID (see guard.ts)
+t("replay-refund-cap", refundAmount(162500, 100000) === 62500 && (() => { try { refundAmount(162500, 162501); return false; } catch { return true; } })());
+t("replay SAME-opkey", opKeyOf(new Request("http://localhost", { headers: { "Idempotency-Key": "same" } })) === "same");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

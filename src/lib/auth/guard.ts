@@ -8,7 +8,7 @@ export const statusOf = (e: unknown): number => (e as { status?: number })?.stat
 export async function loadRequest(id: string) {
   const { data, error } = await supabase().from("buyer_requests").select("*").eq("id", id).single();
   if (error || !data) throw Object.assign(new Error("Request not found"), { status: 404 });
-  return data as { id: string; owner_token: string | null; pool: string; scenario: string; crop: string; quantity_kg: number; delivery_days: number; max_price: number; status: string; created_at: string };
+  return data as { id: string; owner_token: string | null; pool: string; scenario: string; crop: string; quantity_kg: number; delivery_days: number; max_price: number; status: string; created_at: string; fixture_id?: string | null };
 }
 
 export async function assertBuyer(req: Request, rec: { owner_token: string | null }): Promise<"buyer" | "hub"> {

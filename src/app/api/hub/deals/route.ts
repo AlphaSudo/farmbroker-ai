@@ -17,6 +17,7 @@ export async function GET(req: Request) {
       sb.from("refunds").select("id,status,usd_minor,provider_refund_id,reason,created_at").eq("deal_id", dealId),
       sb.from("deal_events").select("type,payload,created_at").eq("deal_id", dealId).order("created_at"),
     ]);
+    for (const result of [attempts, ledger, refunds, events]) if (result.error) throw result.error;
     return json({ deal, attempts: attempts.data ?? [], ledger: ledger.data ?? [], refunds: refunds.data ?? [], events: events.data ?? [] });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));

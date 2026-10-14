@@ -32,13 +32,8 @@ export default function ProcurePage({ params }: { params: Promise<{ id: string }
     setBusy(false);
     if (!res.ok) { setError(d.error ?? "Failed"); return; }
     setLog(d.log ?? []);
-    // Server already committed atomically; animate the recorded result only.
-    const final = Number(d.covered ?? 0);
-    setTicks([]);
-    [0.34, 0.67, 1].forEach((f, i) => setTimeout(() => {
-      setP({ ...d, covered: Math.round(final * f) });
-      setTicks((t) => [...t, `Batch ${i + 1}/3 committed ✅`]);
-    }, 800 * (i + 1)));
+    setP(d);
+    setTicks([`${d.supplier_count ?? 0} supply lots reserved atomically.`]);
   }
 
   const pct = p && p.target ? Math.round((p.covered / p.target) * 100) : 0;

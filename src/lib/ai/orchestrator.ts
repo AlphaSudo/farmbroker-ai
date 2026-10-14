@@ -3,7 +3,7 @@
 import { supabase } from "../supabase";
 import { chatJSON } from "../ai";
 import { SelectionSchema } from "./schemas";
-import { evaluate_candidate_plans, type Candidate } from "./tools";
+import { evaluate_candidate_plans } from "./tools";
 
 const LEASE_MS = 120000;
 
@@ -18,42 +18,42 @@ export async function createRun(requestId: string, dealId: string | null, kind: 
 
 export async function advancePlanRun(runId: string, opKey: string) {
   const sb = supabase();
-  const { data: run, error } = await sb.from("agent_runs").select("*").eq("id", runId).single();
-  if (error || !run) throw Object.assign(new Error("run not found"), { status: 404 });
-  const r = run as { id: string; request_id: string; status: string; lease_expires_at: string; attempts: number; snapshot: { candidates?: Candidate[] } };
-  if (r.status !== "open") return { replayed: true, status: r.status };
-  if (new Date(r.lease_expires_at).getTime() < Date.now()) throw Object.assign(new Error("Run lease expired — resume with a fresh advance."), { status: 409 });
-  const { data: seen } = await sb.from("agent_steps").select("output").eq("op_key", opKey).maybeSingle();
-  if (seen) return { replayed: true, ...(seen as { output: object }).output };
-
+  const claim = await sb.rpc("claim_agent_run", { p_run: runId });
+  if (claim.error) throw Object.assign(new Error(claim.error.message), { status: 404 });
+  const { claimed, run: r } = claim.data;
+  if (!claimed) return { replayed: true, status: r.status, ...(r.snapshot.result ?? {}) };
+  const key = `${runId}:${r.attempts}:${opKey}`;
   const t0 = Date.now();
-  const candidates = await evaluate_candidate_plans(r.request_id);
-  if (candidates.length === 0) {
-    await sb.from("agent_runs").update({ status: "failed" }).eq("id", runId);
-    await step(runId, "evaluate", { request: r.request_id }, { feasible: 0 }, null, Date.now() - t0, "no feasible candidate", opKey);
-    throw Object.assign(new Error("No feasible candidate — order cannot be promised."), { status: 422 });
+  try {
+    const candidates = await evaluate_candidate_plans(r.request_id);
+    const summaries = candidates.map(c => ({ id: c.id, strategy: c.strategy, total_kg: c.total_kg, lots: c.items.length }));
+    await step(runId, "evaluate", { request: r.request_id }, { candidates: summaries }, null, Date.now() - t0, candidates.length ? "ok" : "no feasible candidate", `${key}:eval`);
+    if (!candidates.length) {
+      const failed = await sb.from("agent_runs").update({ status: "failed" }).eq("id", runId).eq("lease_token", r.lease_token);
+      if (failed.error) throw failed.error;
+      throw Object.assign(new Error("No feasible candidate - order cannot be promised."), { status: 422 });
+    }
+    const prompt = `Feasible supply plans:\n${candidates.map(c => `- ${c.id}: ${c.strategy}, cost ${c.cost_total}, ${c.items.length} lots`).join("\n")}\nPick exactly one listed ID. Reply JSON {"candidate_id":"...","justification":"..."} (under 120 words).`;
+    const ai = await chatJSON("Select one feasible procurement plan ID. Never invent suppliers, quantities, or prices. Reply JSON only.", prompt);
+    let selection = null as null | { candidate_id: string; justification: string };
+    if (ai) {
+      try {
+        const parsed = SelectionSchema.safeParse(JSON.parse(ai.text.match(/\{[\s\S]*\}/)?.[0] ?? "null"));
+        if (parsed.success && candidates.some(c => c.id === parsed.data.candidate_id)) selection = parsed.data;
+      } catch { /* invalid model output never commits a plan */ }
+    }
+    await step(runId, "select", { candidates: candidates.map(c => c.id) }, selection ?? { valid: false }, ai?.model ?? null, Date.now() - t0, selection ? "ok" : "rejected: invalid/unavailable selection", `${key}:select`);
+    if (!selection) throw Object.assign(new Error("Live AI unavailable or invalid - run paused for retry."), { status: 503 });
+    const result = { selection, provenance: `Live AI (${ai!.model})`, candidates: summaries };
+    const completed = await sb.from("agent_runs").update({ status: "decided", snapshot: { ...r.snapshot, selection, result } }).eq("id", runId).eq("lease_token", r.lease_token).select("id").maybeSingle();
+    if (completed.error) throw completed.error;
+    if (!completed.data) throw Object.assign(new Error("Run lease changed; refresh stored state."), { status: 409 });
+    return { replayed: false, ...result };
+  } catch (e) {
+    const paused = await sb.from("agent_runs").update({ status: "paused" }).eq("id", runId).eq("lease_token", r.lease_token).eq("status", "running");
+    if (paused.error) throw paused.error;
+    throw e;
   }
-  await step(runId, "evaluate", { request: r.request_id }, { candidates: candidates.map((c) => ({ id: c.id, strategy: c.strategy, total_kg: c.total_kg, cost_total: c.cost_total, lots: c.items.length })) }, null, Date.now() - t0, "ok", `${opKey}:eval`);
-
-  const prompt = `Feasible supply plans (IDs are authoritative):\n${candidates.map((c) => `- ${c.id}: ${c.strategy}, cost ${c.cost_total}, ${c.items.length} lots`).join("\n")}\nPick EXACTLY one listed ID. Reply JSON {"candidate_id": "...", "justification": "..."} (<=120 words).`;
-  const ai = await chatJSON("You select one feasible procurement plan ID. Never invent suppliers, quantities, or prices. Reply JSON only.", prompt);
-  let parsed = null as null | { candidate_id: string; justification: string };
-  let model: string | null = null;
-  if (ai) {
-    try {
-      const j = JSON.parse(ai.text.match(/\{[\s\S]*\}/)?.[0] ?? "null");
-      const v = SelectionSchema.safeParse(j);
-      if (v.success) { parsed = v.data; model = ai.model; }
-    } catch { /* fall through */ }
-  }
-  if (!parsed || !candidates.some((c) => c.id === parsed!.candidate_id)) {
-    await step(runId, "select", { candidates: candidates.map((c) => c.id) }, { raw: ai?.text?.slice(0, 300) ?? null }, model, Date.now() - t0, "rejected: unknown/invalid candidate", `${opKey}:select`);
-    await sb.from("agent_runs").update({ status: "paused" }).eq("id", runId);
-    throw Object.assign(new Error("Model selection invalid — run paused, no plan committed."), { status: 502 });
-  }
-  await step(runId, "select", { candidates: candidates.map((c) => c.id) }, parsed, model, Date.now() - t0, "ok", `${opKey}:select`);
-  await sb.from("agent_runs").update({ status: "decided", snapshot: { ...(r.snapshot as object), selection: parsed } }).eq("id", runId);
-  return { replayed: false, selection: parsed, provenance: model ? `Live AI (${model})` : "Manual/rules-assisted", candidates };
 }
 
 async function step(runId: string, kind: string, input: object, output: object, model: string | null, latency: number, validation: string, opKey: string) {

@@ -21,18 +21,22 @@ export async function POST(req: Request) {
     const parsed = Body.safeParse(await req.json());
     if (!parsed.success) return err(parsed.error.issues[0]?.message ?? "Invalid input");
     const structured = demandAgent(parsed.data);
+    const jar = await cookies();
+    const previous = jar.get("fb_buyer")?.value;
+    const ownerToken = previous && /^[0-9a-f-]{36}$/i.test(previous) ? previous : crypto.randomUUID();
     const { data, error } = await supabase()
       .from("buyer_requests")
       .insert({
         buyer_name: parsed.data.buyer_name, crop: structured.crop, quantity_kg: structured.quantity_kg,
         delivery_days: structured.delivery_days, max_price: parsed.data.max_price, status: "open",
         pool: parsed.data.pool ?? "demo", scenario: parsed.data.scenario ?? "happy-path",
+        owner_token: ownerToken,
       })
       .select("id,owner_token")
       .single();
     if (error) throw error;
-    (await cookies()).set("fb_buyer", (data as { owner_token: string }).owner_token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
-    return json({ request: data }, 201);
+    jar.set("fb_buyer", ownerToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
+    return json({ request: { id: data.id } }, 201);
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed to create request", 500);
   }

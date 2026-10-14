@@ -4,7 +4,7 @@
 import type { Supplier } from "../types";
 import { num } from "../types";
 
-export interface EligibilityInput { crop: string; pool: string; delivery_days: number; requested_at: string; }
+export interface EligibilityInput { crop: string; pool: string; delivery_days: number; requested_at: string; fixture_id?: string | null; include_backup?: boolean; }
 export interface EligibilityResult { eligible: Supplier[]; excluded: Array<{ name: string; reason: string }>; deadline: string; assumedOnTime: number; }
 
 export function eligibleSuppliers(suppliers: Supplier[], input: EligibilityInput): EligibilityResult {
@@ -14,6 +14,8 @@ export function eligibleSuppliers(suppliers: Supplier[], input: EligibilityInput
   const excluded: Array<{ name: string; reason: string }> = [];
   let assumedOnTime = 0;
   for (const s of suppliers) {
+    if ((s.fixture_id ?? null) !== (input.fixture_id ?? null)) { excluded.push({ name: s.name, reason: "different fixture" }); continue; }
+    if (s.quarantined || (s.backup_only && !input.include_backup)) { excluded.push({ name: s.name, reason: "unavailable lot" }); continue; }
     if (s.crop.trim().toLowerCase() !== want) { excluded.push({ name: s.name, reason: "wrong crop" }); continue; }
     if (s.pool !== (input.pool as Supplier["pool"])) { excluded.push({ name: s.name, reason: "different pool" }); continue; }
     if (num(s.quantity_kg) <= 0) { excluded.push({ name: s.name, reason: "zero quantity" }); continue; }

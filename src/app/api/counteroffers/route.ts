@@ -1,9 +1,10 @@
 import { supabase } from "@/lib/supabase";
-import { eligibleSuppliers } from "@/lib/domain/eligibility";
+import { eligibleKg } from "@/lib/domain/eligibility";
+import { availableSupply } from "@/lib/domain/supply";
+import { pricePreview } from "@/lib/agents/pricing";
 import { createRevision } from "@/lib/domain/revisions";
 import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { json, err, statusOf } from "@/lib/http";
-import type { Supplier } from "@/lib/types";
 import { num } from "@/lib/types";
 
 // POST { requestId, offered } → structured counteroffer. Accepted/countered offers persist
@@ -11,24 +12,24 @@ import { num } from "@/lib/types";
 export async function POST(req: Request) {
   try {
     const { requestId, offered } = (await req.json()) as { requestId?: string; offered?: number };
-    if (!requestId || !Number.isFinite(offered)) return err("requestId + offered required");
+    if (!requestId || !Number.isFinite(offered) || Number(offered) <= 0) return err("requestId + positive offered price required");
     const request = await loadRequest(requestId);
     await assertBuyer(req, request);
     if (!["open", "quoted"].includes(request.status)) return err("Negotiation closed after payment.", 422);
-    const { data: suppliers } = await supabase().from("suppliers").select("*").eq("pool", request.pool);
-    const sel = eligibleSuppliers((suppliers ?? []) as Supplier[], {
-      crop: request.crop, pool: request.pool, delivery_days: request.delivery_days, requested_at: request.created_at,
-    });
-    if (!sel.eligible.length) return err("No eligible supply.", 422);
-    const floor = Math.max(...sel.eligible.map((s) => num(s.min_price)));
+    const sel = await availableSupply(request);
+    if (eligibleKg(sel) < Number(request.quantity_kg)) return err("Insufficient eligible supply.", 422);
+    const { clearing: floor } = pricePreview(request, sel.eligible);
     const max = num(request.max_price);
     const offer = num(offered);
     let decision: "accepted" | "countered" | "refused";
     let price: number | null = null;
     let reason = "";
-    if (offer < floor) {
+    if (floor > max) {
+      decision = "refused";
+      reason = "Supplier floor exceeds your budget. Adjust the request scope.";
+    } else if (offer < floor) {
       decision = "countered";
-      price = Math.round(((offer + floor + 0.5) / 2) * 10) / 10;
+      price = Math.min(max, Math.ceil((floor + 0.2) * 10) / 10);
       reason = `Below floor ${floor} EGP/kg — server counteroffer ${price} EGP/kg.`;
     } else if (offer > max) {
       decision = "refused";

@@ -19,9 +19,9 @@ export async function GET(req: Request) {
     const sb = supabase();
     const { data: deal } = await sb.from("deals").select("request_id").eq("id", dealId).single();
     if (!deal) return err("Deal not found", 404);
-    await assertBuyer(req, await loadRequest((deal as { request_id: string }).request_id));
+    const role = await assertBuyer(req, await loadRequest((deal as { request_id: string }).request_id));
     const { data } = await sb.from("deal_events").select("type,payload,created_at").eq("deal_id", dealId).order("created_at");
-    return json({ events: ((data ?? []) as Array<{ type: string; payload: object; created_at: string }>).map((e) => ({ ...e, label: LABELS[e.type] ?? e.type })) });
+    return json({ events: ((data ?? []) as Array<{ type: string; payload: object; created_at: string }>).map((e) => ({ ...e, payload: role === "hub" ? e.payload : {}, label: LABELS[e.type] ?? e.type })) });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));
   }

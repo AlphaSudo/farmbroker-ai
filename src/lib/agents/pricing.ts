@@ -12,13 +12,14 @@ export function pricePreview(request: Pick<BuyerRequest, "quantity_kg">, supplie
   const sorted = [...suppliers].sort((a, b) => num(a.min_price) - num(b.min_price));
   let need = request.quantity_kg;
   let min_cost_floor = 0;
+  let clearing = 0;
   for (const s of sorted) {
     if (need <= 0) break;
     const take = Math.min(need, num(s.quantity_kg));
     min_cost_floor += take * num(s.min_price);
+    if (take > 0) clearing = Math.max(clearing, num(s.min_price));
     need -= take;
   }
-  const clearing = sorted.length ? Math.max(...sorted.map((s) => num(s.min_price))) : 0;
   return { min_cost_floor: Math.round(min_cost_floor), clearing };
 }
 

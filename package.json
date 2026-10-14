@@ -9,7 +9,10 @@
     "lint": "eslint",
     "eval": "npx --yes tsx scripts/evaluate.mts",
     "smoke": "node scripts/smoke.mjs",
-    "verify": "npx --yes tsx scripts/verify-math.mts"
+    "verify": "npx --yes tsx scripts/verify-math.mts",
+    "test:domain": "npx --yes tsx scripts/domain-regressions.mts",
+    "test:db": "node scripts/database-regressions.mjs",
+    "test:live": "node scripts/live-tests.mjs"
   },
   "dependencies": {
     "@paypal/react-paypal-js": "^10.6.0",

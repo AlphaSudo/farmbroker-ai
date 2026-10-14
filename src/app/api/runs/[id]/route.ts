@@ -10,10 +10,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     const { data: run, error } = await sb.from("agent_runs").select("*").eq("id", id).single();
     if (error || !run) return err("Run not found", 404);
     const request = await loadRequest((run as { request_id: string }).request_id);
-    await assertBuyer(req, request);
+    const role = await assertBuyer(req, request);
     const { data: steps } = await sb.from("agent_steps").select("kind,input,output,model,latency_ms,validation,created_at").eq("run_id", id).order("created_at");
     const { status, kind, policy_version, snapshot, lease_expires_at, attempts } = run as Record<string, unknown>;
-    return json({ run: { id, status, kind, policy_version, snapshot, lease_expires_at, attempts }, steps: steps ?? [] });
+    return json({ run: { id, status, kind, policy_version, snapshot: role === "hub" ? snapshot : { selection: (snapshot as { selection?: unknown }).selection }, lease_expires_at, attempts }, steps: role === "hub" ? steps ?? [] : (steps ?? []).map(({ kind, model, latency_ms, validation, created_at }) => ({ kind, model, latency_ms, validation, created_at })) });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));
   }
