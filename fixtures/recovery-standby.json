@@ -1,0 +1,6 @@
+// Designated recovery standby (2.1/2.6). Standby lots are excluded from baseline
+// quotes and offered first during incident recovery, inside original authority.
+{
+  "standby_lots": [{ "name": "Omar", "crop": "Mint", "pool": "full", "note": "recovery-only; never quoted at baseline" }],
+  "policy": "v1"
+}

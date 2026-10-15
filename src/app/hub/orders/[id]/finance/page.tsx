@@ -10,6 +10,8 @@ export default function HubFinance({ params }: { params: Promise<{ id: string }>
     ledger?: Array<{ kind: string; egp_minor: number; usd_minor: number; note: string }>;
     refunds?: Array<{ id: string; status: string; usd_minor: number; provider_refund_id: string | null; reason: string }>;
     events?: Array<{ type: string; payload: object; created_at: string }>;
+    entitlementsMinor?: number;
+    exposure?: { acceptedObligationsMinor: number; pendingRefundsMinor: number; capturedEgpMinor: number; netExposureMinor: number } | null;
   } | null>(null);
   const [msg, setMsg] = useState("");
   const [reason, setReason] = useState("");
@@ -47,8 +49,13 @@ export default function HubFinance({ params }: { params: Promise<{ id: string }>
               <div className="rounded-2xl bg-emerald-900/60 p-4">Capture: <b className="font-mono text-xs">{d.deal.paypal_capture_id ?? "—"}</b></div>
             </div>
             {d.deal.paypal_verified && <p className="text-sm text-emerald-200">Verified: {d.deal.paypal_verified.amount} {d.deal.paypal_verified.currency} · payee {d.deal.paypal_verified.payee}</p>}
-            <h2 className="font-bold">Payment attempts</h2>
-            {(d.attempts ?? []).map((a) => <p key={a.id} className="font-mono text-xs text-emerald-200">{a.provider_order_id} — {a.status} — {(a.usd_minor / 100).toFixed(2)} USD</p>)}
+            {d.exposure && (
+              <div className="rounded-2xl border border-emerald-800 p-4 text-sm">
+                <p>Accepted obligations: <b>{(d.exposure.acceptedObligationsMinor / 100).toLocaleString()} EGP</b> · Pending refunds: <b>{(d.exposure.pendingRefundsMinor / 100).toFixed(2)} USDc</b></p>
+                <p>Captured: <b>{(d.exposure.capturedEgpMinor / 100).toLocaleString()} EGP</b> · Net exposure: <b className="text-amber-300">{(d.exposure.netExposureMinor / 100).toLocaleString()} EGP</b> (simulated obligations + real sandbox funds)</p>
+              </div>
+            )}
+            <h2 className="font-bold">Payment attempts</h2>            {(d.attempts ?? []).map((a) => <p key={a.id} className="font-mono text-xs text-emerald-200">{a.provider_order_id} — {a.status} — {(a.usd_minor / 100).toFixed(2)} USD</p>)}
             <h2 className="font-bold">Ledger (append-only)</h2>
             {(d.ledger ?? []).map((l, i) => <p key={i} className="font-mono text-xs text-emerald-200">{l.kind}: EGP {(l.egp_minor / 100).toFixed(2)} · USD {(l.usd_minor / 100).toFixed(2)} — {l.note}</p>)}
             <h2 className="font-bold">Refunds</h2>

@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     if (pending || list.length === 0) {
       return json({ ready: false, reason: "Complete inspection first", accepted_kg: accepted, target_kg: request.quantity_kg });
     }
-    const settlement = financeAgent(deal, list);
+    const settlement = financeAgent(deal, list, (deal as { pricing_policy?: string }).pricing_policy);
     return json({ ready: accepted >= num(request.quantity_kg), accepted_kg: accepted, target_kg: request.quantity_kg, preview: true, ...buyerSettlement(settlement) });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       return err(`Unresolved shortage: ${accepted.toLocaleString()}/${num(request.quantity_kg).toLocaleString()}kg accepted. Recovery or refund required — this order cannot complete.`, 403);
     }
     if (!["procuring", "covered", "short", "settled"].includes(deal.status)) return err(`Deal is ${deal.status}`, 409);
-    const settlement = financeAgent(deal, list);
+    const settlement = financeAgent(deal, list, (deal as { pricing_policy?: string }).pricing_policy);
     const sb = supabase();
     const completed = await sb.rpc("complete_deal_phase", { p_deal: body.dealId, p_phase: "settle" });
     if (completed.error) return err(completed.error.message, 409);

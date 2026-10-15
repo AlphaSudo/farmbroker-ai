@@ -4,27 +4,65 @@ export const EGP_PER_USD = 48;
 export const egpToUsd = (egp: number): string => (egp / EGP_PER_USD).toFixed(2);
 
 const BASE = "https://api-m.sandbox.paypal.com";
+const TIMEOUT_MS = 15000;
+
+// Bounded provider I/O (2.3): every call has a finite deadline; no hanging sockets.
+export async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = TIMEOUT_MS): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(new Error("provider timeout")), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Retry classification (2.3): network errors, 429 (honoring Retry-After), and 5xx retry
+// with the SAME operation key; 4xx never retries (except 429). Max 3 attempts.
+export async function providerCall<T>(op: string, key: string, fn: () => Promise<T>): Promise<T> {
+  let last: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      const status = (e as { status?: number })?.status;
+      const retryable = e instanceof Error && (/timeout|network|fetch failed|aborted/i.test(e.message) || status === 429 || (typeof status === "number" && status >= 500));
+      if (!retryable || attempt === 2) throw e;
+      const wait = 500 * 2 ** attempt;
+      console.warn("PayPal retry", { op, key, attempt: attempt + 1, wait });
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw last;
+}
+
 let token: { value: string; exp: number } | null = null;
+let tokenFlight: Promise<string> | null = null; // single-flight within each warm process (2.3)
 
 export async function getAccessToken(): Promise<string> {
   if (token && Date.now() < token.exp) return token.value;
-  const id = process.env.PAYPAL_CLIENT_ID;
-  const secret = process.env.PAYPAL_SECRET;
-  if (!id || !secret) throw new Error("Missing PAYPAL_CLIENT_ID / PAYPAL_SECRET");
-  const res = await fetch(`${BASE}/v1/oauth2/token`, {
-    method: "POST",
-    headers: { Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
-    body: "grant_type=client_credentials",
-  });
-  if (!res.ok) throw new Error(`PayPal auth failed (${res.status})`);
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  token = { value: data.access_token, exp: Date.now() + (data.expires_in - 60) * 1000 };
-  return token.value;
+  tokenFlight ??= (async () => {
+    const id = process.env.PAYPAL_CLIENT_ID;
+    const secret = process.env.PAYPAL_SECRET;
+    if (!id || !secret) throw new Error("Missing PAYPAL_CLIENT_ID / PAYPAL_SECRET");
+    const res = await fetchWithTimeout(`${BASE}/v1/oauth2/token`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: "grant_type=client_credentials",
+    });
+    if (!res.ok) throw new Error(`PayPal auth failed (${res.status})`);
+    const data = (await res.json()) as { access_token: string; expires_in: number };
+    token = { value: data.access_token, exp: Date.now() + (data.expires_in - 60) * 1000 };
+    return token.value;
+  })().finally(() => { tokenFlight = null; });
+  return tokenFlight;
 }
 
 export async function createOrder(dealId: string, totalEgp: number, requestId?: string) {
   const access = await getAccessToken();
-  const res = await fetch(`${BASE}/v2/checkout/orders`, {
+  return providerCall("create-order", requestId ?? dealId, async () => {
+    const res = await fetchWithTimeout(`${BASE}/v2/checkout/orders`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${access}`, "Content-Type": "application/json",
@@ -37,18 +75,21 @@ export async function createOrder(dealId: string, totalEgp: number, requestId?: 
   });
   if (!res.ok) await providerError(res, "create-order");
   return (await res.json()) as { id: string };
+  });
 }
 
 export async function captureOrder(orderId: string, requestId?: string) {
   const access = await getAccessToken();
-  const res = await fetch(`${BASE}/v2/checkout/orders/${orderId}/capture`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json", ...(requestId ? { "PayPal-Request-Id": requestId } : {}) },
+  return providerCall("capture", requestId ?? orderId, async () => {
+    const res = await fetchWithTimeout(`${BASE}/v2/checkout/orders/${orderId}/capture`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json", ...(requestId ? { "PayPal-Request-Id": requestId } : {}) },
+    });
+    if (!res.ok) await providerError(res, "capture");
+    const data = (await res.json()) as { id: string; purchase_units?: Array<{ payments?: { captures?: Array<{ id: string }> } }> };
+    const captureId = data.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? "";
+    return { orderId: data.id, captureId };
   });
-  if (!res.ok) await providerError(res, "capture");
-  const data = (await res.json()) as { id: string; purchase_units?: Array<{ payments?: { captures?: Array<{ id: string }> } }> };
-  const captureId = data.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? "";
-  return { orderId: data.id, captureId };
 }
 
 export interface VerifiedCapture { ok: boolean; captureId: string; status: string; amount: string; currency: string; payeeEmail: string; reason?: string; }
@@ -56,7 +97,7 @@ export interface VerifiedCapture { ok: boolean; captureId: string; status: strin
 // Full binding check: COMPLETED + amount + currency + platform payee (1.1/1.5).
 export async function verifyCapture(orderId: string, expectedUsd: string, merchantEmail: string, expectedDealId?: string): Promise<VerifiedCapture> {
   const access = await getAccessToken();
-  const res = await fetch(`${BASE}/v2/checkout/orders/${orderId}`, { headers: { Authorization: `Bearer ${access}` } });
+  const res = await fetchWithTimeout(`${BASE}/v2/checkout/orders/${orderId}`, { headers: { Authorization: `Bearer ${access}` } });
   if (!res.ok) return { ok: false, captureId: "", status: "", amount: "", currency: "", payeeEmail: "", reason: `order lookup failed (${res.status})` };
   const o = (await res.json()) as {
     status: string; purchase_units: Array<{ custom_id?: string; amount: { currency_code: string; value: string }; payee?: { email_address?: string }; payments?: { captures?: Array<{ id: string; status: string; amount: { value: string; currency_code: string } }> } }>;
@@ -74,21 +115,23 @@ export async function verifyCapture(orderId: string, expectedUsd: string, mercha
 
 export async function refundCapture(captureId: string, usdValue: string, requestId?: string) {
   const access = await getAccessToken();
-  const res = await fetch(`${BASE}/v2/payments/captures/${captureId}/refund`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${access}`, "Content-Type": "application/json",
-      ...(requestId ? { "PayPal-Request-Id": requestId } : {}),
-    },
-    body: JSON.stringify({ amount: { currency_code: "USD", value: usdValue } }),
+  return providerCall("refund", requestId ?? captureId, async () => {
+    const res = await fetchWithTimeout(`${BASE}/v2/payments/captures/${captureId}/refund`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${access}`, "Content-Type": "application/json",
+        ...(requestId ? { "PayPal-Request-Id": requestId } : {}),
+      },
+      body: JSON.stringify({ amount: { currency_code: "USD", value: usdValue } }),
+    });
+    if (!res.ok) await providerError(res, "refund");
+    return (await res.json()) as { id: string; status: string };
   });
-  if (!res.ok) await providerError(res, "refund");
-  return (await res.json()) as { id: string; status: string };
 }
 
 export async function getRefund(refundId: string) {
   const access = await getAccessToken();
-  const res = await fetch(`${BASE}/v2/payments/refunds/${refundId}`, { headers: { Authorization: `Bearer ${access}` } });
+  const res = await fetchWithTimeout(`${BASE}/v2/payments/refunds/${refundId}`, { headers: { Authorization: `Bearer ${access}` } });
   if (!res.ok) throw new Error(`Refund lookup failed (${res.status})`);
   return (await res.json()) as { id: string; status: string };
 }

@@ -1,0 +1,7 @@
+// Scenario fixtures (2.0/2.6/2.9). happy-path uses the locked math; quality-recovery
+// rejects the 2,000 kg lot and repairs from standby; refund-required has no backup.
+{
+  "happy-path": { "lots": "demo-3", "reject": [], "expect": { "total": 78000, "pool": 75000, "spread": 3000, "split": [15000, 22500, 37500] } },
+  "quality-recovery": { "lots": "demo-3+standby", "reject": [{ "lot": "Ahmed", "kg": 2000, "reason": "moisture 25%" }], "expect": { "accepted_after_failure": 8000, "repaired_to": 10000, "charge_unchanged": 78000 } },
+  "refund-required": { "lots": "demo-3-no-standby", "reject": "all", "expect": { "outcome": "refunded", "payables_preserved": true } }
+}

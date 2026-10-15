@@ -24,11 +24,10 @@ let pass = 0, fail = 0;
 const check = (n, c, x = "") => { console.log(`${c ? "PASS" : "FAIL"} ${n}${x ? ` — ${x}` : ""}`); if (c) pass++; else { fail++; process.exitCode = 1; } };
 
 const hub = { "x-hub-key": HUB };
-const reset = await req("/api/hub/reset", { method: "POST", headers: hub });
-check("hub reset", reset.status === 200, reset.data.seed_request ?? reset.status);
 const imp = await req("/api/hub/import", { method: "POST", headers: hub });
 check("import 100", imp.status === 200 && imp.data.imported === 100);
-const cq = await req("/api/requests", { method: "POST", body: JSON.stringify({ buyer_name: "Smoke", crop: "Mint", quantity_kg: 10000, delivery_days: 7, max_price: 9 }) });
+const tag = `Smoke-${Date.now().toString(36)}`;
+const cq = await req("/api/requests", { method: "POST", body: JSON.stringify({ buyer_name: tag, crop: "Mint", quantity_kg: 10000, delivery_days: 7, max_price: 9 }) });
 check("create", cq.status === 201);
 const id = cq.data.request?.id;
 const an = await req("/api/analyze", { method: "POST", body: JSON.stringify({ requestId: id }) });

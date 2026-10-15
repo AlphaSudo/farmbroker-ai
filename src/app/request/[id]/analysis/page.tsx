@@ -23,13 +23,13 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
       {a && (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Card title="Supply Confidence" big>{a.confidence}%</Card>
+            <Card title="Feasibility score (heuristic)" big>{a.confidence}%</Card>
             <Card title="Available" big>{a.available_kg.toLocaleString()}kg</Card>
             <Card title="Suppliers (network count)" big>{a.supplier_count}</Card>
             <Card title="Risk Level" big>{a.risk_level}</Card>
           </div>
           <ul className="list-disc space-y-1 pl-6 text-emerald-100">{a.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          <p className="text-sm text-emerald-300">Sourced from FarmBroker Supply Network — supplier identities stay with the platform (GR#1).</p>
+          <p className="text-sm text-emerald-300">Sourced from FarmBroker Supply Network — supplier identities stay with the platform (GR#1). The score is a coverage heuristic, not a calibrated success probability.</p>
           <AgentLog lines={log} />
           {a.quotable
             ? <a href={`/request/${id}/quote`} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Approve & Get Quote →</a>

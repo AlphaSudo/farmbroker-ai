@@ -1,13 +1,16 @@
 // Server-only OpenRouter JSON adapter. Each configured model is tried once.
-// Bounded timeout and output budget; an unavailable model returns no selection.
+// Budgets (2.5): 8s per call, max 2 calls per operation, 25s overall deadline enforced
+// by callers. AI_PLANNING=off disables autonomous calls (deterministic ops continue).
 const BASE = process.env.AI_BASE_URL ?? "https://openrouter.ai/api/v1";
 const MODELS = [...new Set([process.env.AI_MODEL_PRIMARY ?? "nvidia/nemotron-3.5-lightning:free", process.env.AI_MODEL_SECONDARY ?? "nvidia/nemotron-3.5-lightning:free"])];
+const CALL_TIMEOUT_MS = 8000;
+export const aiOff = (): boolean => process.env.AI_PLANNING === "off";
 
 async function callModel(model: string, system: string, user: string): Promise<string | null> {
   const key = process.env.AI_API_KEY;
-  if (!key) return null;
+  if (!key || aiOff()) return null;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 12000);
+  const t = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS);
   try {
     const res = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
@@ -29,7 +32,10 @@ async function callModel(model: string, system: string, user: string): Promise<s
 }
 
 export async function chatJSON(system: string, user: string): Promise<{ text: string; model: string } | null> {
+  if (aiOff()) return null;
+  let calls = 0;
   for (const model of MODELS) {
+    if (++calls > 2) break; // bounded fallback chain (2.5)
     const text = await callModel(model, system, user);
     if (text) return { text, model };
   }

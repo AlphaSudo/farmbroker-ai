@@ -12,13 +12,27 @@ export default function RequestDetail({ params }: { params: Promise<{ id: string
   const [id, setId] = useState("");
   const [data, setData] = useState<{ request?: Record<string, number | string | null> & { analysis?: { confidence: number } | null; status: string }; deal?: { id: string; status: string; outcome: string } | null } | null>(null);
   const [events, setEvents] = useState<Array<{ label: string; created_at: string }>>([]);
+  const [version, setVersion] = useState(0);
   useEffect(() => { params.then((p) => setId(p.id)); }, [params]);
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/requests/${id}`).then((r) => r.json()).then((d) => {
-      setData(d);
-      if (d.deal) fetch(`/api/events?dealId=${d.deal.id}`).then((r) => r.json()).then((e) => setEvents(e.events ?? []));
-    });
+    let stop = false;
+    let delay = 5000;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = async () => {
+      const r = await fetch(`/api/requests/${id}/summary`).then((x) => x.json()).catch(() => null);
+      if (stop || !r?.request) return;
+      setData({ request: r.request, deal: r.deal });
+      setEvents(r.events ?? []);
+      setVersion(r.version ?? 0);
+      const live = r.deal && r.deal.outcome !== "fulfilled" && r.deal.outcome !== "refunded";
+      if (live && !document.hidden) {
+        delay = Math.min(30000, delay * 1.5); // backoff while pending; stops at terminal outcomes
+        timer = setTimeout(tick, delay);
+      }
+    };
+    tick();
+    return () => { stop = true; clearTimeout(timer); };
   }, [id]);
   if (!data?.request) return <Shell><p>Loading…</p></Shell>;
   const r = data.request;
@@ -48,7 +62,7 @@ export default function RequestDetail({ params }: { params: Promise<{ id: string
       ))}
       {events.length > 0 && (
         <div className="rounded-2xl border border-emerald-800 p-4">
-          <h3 className="font-bold">Order timeline (recorded events)</h3>
+          <h3 className="font-bold">Order timeline (recorded events) · v{version}</h3>
           <ul className="mt-2 space-y-1 text-sm text-emerald-100">
             {events.map((e, i) => <li key={i}>{e.label} · {String(e.created_at).slice(0, 19).replace("T", " ")}</li>)}
           </ul>

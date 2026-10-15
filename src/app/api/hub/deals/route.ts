@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { hubAuthorized } from "@/lib/auth/actor";
+import { platformExposure } from "@/lib/finance/exposure";
 import { json, err, statusOf } from "@/lib/http";
 
 // GET ?dealId= → full Hub deal view: verified evidence, attempts, ledger, refunds, outcome.
@@ -18,7 +19,21 @@ export async function GET(req: Request) {
       sb.from("deal_events").select("type,payload,created_at").eq("deal_id", dealId).order("created_at"),
     ]);
     for (const result of [attempts, ledger, refunds, events]) if (result.error) throw result.error;
-    return json({ deal, attempts: attempts.data ?? [], ledger: ledger.data ?? [], refunds: refunds.data ?? [], events: events.data ?? [] });
+    const { data: allocs } = await sb.from("allocations").select("usable_kg,allocated_kg,inspection_status,entitlement_rate,entitlement_minor,cost").eq("deal_id", dealId);
+    let acceptedObligations = 0;
+    for (const a of (allocs ?? []) as Array<{ usable_kg: number | null; allocated_kg: number; inspection_status: string; entitlement_rate: number | null; entitlement_minor: number | null; cost: number }>) {
+      if (a.inspection_status !== "passed" && a.inspection_status !== "partial") continue;
+      const usable = Math.min(Number(a.usable_kg ?? a.allocated_kg), Number(a.allocated_kg));
+      acceptedObligations += a.entitlement_minor ?? Math.round(usable * Number(a.entitlement_rate ?? (Number(a.allocated_kg) > 0 ? Number(a.cost) / Number(a.allocated_kg) : 0)) * 100);
+    }
+    const pendingRefunds = ((refunds.data ?? []) as Array<{ status: string; usd_minor: number }>)
+      .filter((r) => ["requested", "pending"].includes(r.status)).reduce((s, r) => s + Number(r.usd_minor), 0);
+    const verified = (deal as { paypal_verified?: { amount?: string } | null }).paypal_verified;
+    const exposure = platformExposure({
+      acceptedObligationsMinor: acceptedObligations, pendingRefundsMinor: pendingRefunds,
+      capturedUsdMinor: verified?.amount ? Math.round(Number(verified.amount) * 100) : 0, fxEgpPerUsd: 48,
+    });
+    return json({ deal, attempts: attempts.data ?? [], ledger: ledger.data ?? [], refunds: refunds.data ?? [], events: events.data ?? [], entitlementsMinor: acceptedObligations, exposure });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));
   }

@@ -33,6 +33,11 @@ export async function POST(req: Request) {
     const { incident, missing } = await openIncident(body.dealId, opKey);
     if (!incident) return json({ recovered: true, missing: 0, note: "Coverage already complete — no incident." });
     const id = (incident as { id: string }).id;
+    if ((incident as { status: string }).status === "open") {
+      await sb.from("deals").update({ pricing_policy: "v2-entitlement" }).eq("id", body.dealId).eq("pricing_policy", "v1-clearing");
+      const { recordEvent } = await import("@/lib/domain/events");
+      await recordEvent(body.dealId, "recovery_policy_v2", { incident: id, missing_kg: missing }, `${opKey}:policy`);
+    }
     if ((incident as { status: string }).status === "recovering") return json({ incident: id, missing, committed: true, replayed: true });
     if ((incident as { status: string }).status === "refund_eligible") return json({ incident: id, missing, refundEligible: true, replayed: true });
     const attempts = await sb.from("allocations").select("attempt").eq("deal_id", body.dealId).order("attempt", { ascending: false }).limit(1);

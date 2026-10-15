@@ -9,6 +9,14 @@ export const IntentSchema = z.object({
   clarifications: z.array(z.string()),
 }).refine((v) => v.quantity_kg > 0 || v.clarifications.length > 0, "Ambiguous quantity requires clarifications");
 
+// Intent v2 (2.5): grade/specification plus confirmed qualitative priorities.
+export const PrioritiesSchema = z.array(z.enum(["lowest_cost", "reliability", "diversity"])).max(3);
+export const IntentV2Schema = IntentSchema.extend({
+  grade: z.string().max(40).nullable(),
+  specification: z.string().max(200).nullable(),
+  priorities: PrioritiesSchema.default([]),
+});
+
 export const CandidateSchema = z.object({
   id: z.string(),
   strategy: z.enum(["cost-first", "reliability-first"]),

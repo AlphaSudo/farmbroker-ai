@@ -1,0 +1,11 @@
+// Canonical demo lots (2.0). One source for seed scripts, fixtures, and docs.
+// Demo supplier rows remain the locked video fixture; standby is recovery-only.
+{
+  "demo": [
+    { "name": "Ahmed", "crop": "Mint", "quantity_kg": 2000, "min_price": 7.0, "location": "Menoufia", "quality_score": 92 },
+    { "name": "Mohamed", "crop": "Mint", "quantity_kg": 3000, "min_price": 7.5, "location": "Menoufia", "quality_score": 88 },
+    { "name": "Ali", "crop": "Mint", "quantity_kg": 5000, "min_price": 7.3, "location": "Giza", "quality_score": 90 }
+  ],
+  "standby": { "name": "Omar", "crop": "Mint", "quantity_kg": 2500, "min_price": 7.4, "location": "Fayoum", "quality_score": 89, "note": "recovery-only lot, never quoted at baseline" },
+  "buyer": { "buyer_name": "Cairo Foods", "crop": "Mint", "quantity_kg": 10000, "delivery_days": 7, "max_price": 9 }
+}

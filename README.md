@@ -6,14 +6,17 @@
 
 We sell **Guaranteed Supply**: buyer asks for 10 Tons Mint, the platform handles everything. NOT a marketplace — buyers never see suppliers, suppliers never see buyers.
 
-Proposed next iterations: [1.1-1.9 roadmap and implementation checklists](docs/roadmap/README.md), grounded in the [October 14 source review](docs/roadmap/project-review.md). The review distinguishes implemented behavior from unverified or incomplete MVP claims below.
+Next program: [2.0–2.9 architecture, performance, product, and evidence roadmap](docs/roadmap-2.0-2.9/README.md), based on the [expanded source review](docs/roadmap-2.0-2.9/source-review.md). Each iteration has an implementation plan and detailed checklist. The [1.1–1.9 roadmap](docs/roadmap/README.md) remains the earlier planning record.
+
+**Verified baseline:** 57 reachable production checks, six domain regressions, and 18 database integration checks passed. Database integration used provider stubs inside a rolled-back transaction. Actual sandbox approval succeeded, but capture remains blocked by `COMPLIANCE_VIOLATION`; six paid live scenarios remain unverified. See [corrections and evidence](docs/regression-fixes-2026-10-15.md). All 2.x work is proposed, not implemented.
 
 ## Run it
 
 ```bash
 npm install
 cp .env.example .env.local   # fill values (never commit)
-node scripts/migrate.mjs     # creates tables + demo seed (or paste supabase/migrations/001_schema.sql in Supabase SQL editor)
+# Apply supabase/migrations/* in numeric order (tracked in schema_migrations):
+# DATABASE_URL=... node scripts/migrate.mjs   (fresh clones need only repo + DATABASE_URL)
 npm run dev                  # http://localhost:3000
 ```
 
@@ -21,9 +24,9 @@ Env (see `.env.example`): `PAYPAL_CLIENT_ID/SECRET/MODE/CURRENCY`, `NEXT_PUBLIC_
 
 Seed demo: Ahmed 2000kg/7.0 + Mohamed 3000kg/7.5 + Ali 5000kg/7.3 Mint, buyer Cairo Foods 10000kg/7d. Full 100-row dataset: Hub → Load button (`POST /api/hub/import`) or `node scripts/import-suppliers.mjs`.
 
-## Flow (Money-first, GR#3)
+## Intended sandbox flow (Money-first, GR#3)
 
-Request → AI Analysis (92%) → Quote 78,000 → Accept → **PayPal Sandbox** → Payment Success → AI Procurement 10/10 → Hub inspection (Grade A/B, `Risk = Supplier → Risk = Platform`, Insured) → Settlement (`Inspection Passed → Payment Released`, `Ready for PayPal Payout`) → Completed.
+Request → AI Analysis (92 feasibility heuristic, not a success probability) → Quote 78,000 → Accept → **PayPal Sandbox** → Payment Success → AI Procurement 10/10 → Hub inspection (Grade A/B, `Risk = Supplier → Risk = Platform`, Insured) → Settlement (`Inspection Passed → Payment Released`, `Ready for PayPal Payout`) → Completed.
 
 Locked demo math: floor 73,000 → clearing 7.5/kg → quote 7.8/kg → total **78,000**, pool 75,000, margin **3,000**, split **15,000 / 22,500 / 37,500**. PayPal charged in USD at fixed demo rate 48 EGP/USD (1,625.00 USD) — sandbox has no EGP. Verify: `npx tsx scripts/verify-math.mts` → `LOCKED-MATH-OK`.
 
@@ -35,21 +38,21 @@ Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@bu
 
 ## Tools used
 
-- **PayPal Sandbox**: Orders v2 API (Create → Approve → Capture) + JS SDK buttons. Central: no payment → no procurement → no deal.
-- **AI (OpenRouter, free tier)**: primary `thinkingmachines/inkling:free`, fallback `nvidia/nemotron-3.5-lightning:free` — negotiation chat + regenerable analysis, same JSON schema as deterministic core with 8s timeout. Remove AI → no score/price/allocation/grade/split.
+- **PayPal Sandbox**: Orders v2 API and JS SDK buttons. Create/approval are verified; actual capture/refund remain provider-blocked. No verified capture means no supplier commitment.
+- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling; retained provider checks used `nvidia/nemotron-3.5-lightning:free`. Initial procurement still uses an independent allocation routine; binding the selected AI plan to execution is a 2.2 priority.
 
 ## Kill test (demonstrated checks)
 
 - Without PayPal confirmation, no procurement commits (verified-paid gate, 403 otherwise).
-- Without a valid AI decision, no new autonomous plan selection/recovery proceeds (runs stay paused; deterministic reads and explicitly labeled manual ops remain available).
+- Without valid model output, autonomous plan selection/recovery planning pauses. Binding initial procurement to that decision remains pending in 2.2; deterministic reads and explicitly labeled manual operations remain available.
 
 ## Capability table
 
 | Area | Status |
 | --- | --- |
-| Live AI plan/intent/recovery selection (OpenRouter free tier, validated) | Live |
-| PayPal Sandbox create/approve/capture/verify/reconcile + full refund | Live (sandbox) |
-| Atomic paid reservations, idempotent operations, event timeline | Live |
+| AI plan selection | Actual provider decision verified; richer intent/recovery acceptance remains part of the live rehearsal |
+| PayPal Sandbox lifecycle | Create/approval verified; capture/refund routes implemented, positive live loop blocked by provider compliance rejection |
+| Atomic reservations, idempotent operations, event timeline | Database integration verified with rolled-back provider stubs; positive paid production journey pending |
 | Supply/inspection/handover data, settlement math | Simulated + labeled |
 | Supplier payouts | Calculated only (`Ready for PayPal Payout`), never sent |
 | Real payouts, carriers, insurers, logistics | Future (out of scope) |

@@ -28,7 +28,7 @@ export async function get_supply_snapshot(requestId: string) {
   };
 }
 
-export interface Candidate { id: string; strategy: "cost-first" | "reliability-first"; items: Array<{ supplier_id: string; kg: number; rate: number }>; total_kg: number; cost_total: number; }
+export interface Candidate { id: string; strategy: "cost-first" | "reliability-first" | "diversity-first"; items: Array<{ supplier_id: string; kg: number; rate: number }>; total_kg: number; cost_total: number; }
 
 export async function evaluate_candidate_plans(requestId: string): Promise<Candidate[]> {
   const sb = supabase();

@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "eval": "npx --yes tsx scripts/evaluate.mts",
+    "perf:supply": "npx --yes tsx scripts/perf/supply.mjs",
+    "benchmark": "npx --yes tsx scripts/benchmark-baseline.mts",
     "smoke": "node scripts/smoke.mjs",
     "verify": "npx --yes tsx scripts/verify-math.mts",
     "test:domain": "npx --yes tsx scripts/domain-regressions.mts",

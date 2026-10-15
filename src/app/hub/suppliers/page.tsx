@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { hubHeaders } from "@/lib/auth/hub-client";
+import SupplyGrid from "@/components/hub/SupplyGrid";
 
 interface S { id: string; name: string; crop: string; quantity_kg: number; min_price: number; location: string | null; quality_score: number | null; pool: string; }
 
@@ -85,6 +86,10 @@ export default function HubSuppliers() {
           <thead><tr className="text-left text-emerald-300"><th>Name</th><th>Crop</th><th>Qty kg</th><th>Min</th><th>Location</th><th>Score</th></tr></thead>
           <tbody>{rows.map((r) => <tr key={r.id} className="border-t border-emerald-900"><td>{r.name}</td><td>{r.crop}</td><td>{Number(r.quantity_kg).toLocaleString()}</td><td>{r.min_price}</td><td>{r.location}</td><td>{r.quality_score}</td></tr>)}</tbody>
         </table>
+        <div className="rounded-2xl bg-emerald-900/60 p-4">
+          <h2 className="mb-2 font-bold">Supply workbench (virtualized, bounded pages)</h2>
+          {unlocked ? <SupplyGrid pool={pool} /> : <p className="text-sm text-emerald-300">Unlock Hub to browse the large-pool workbench.</p>}
+        </div>
         <form onSubmit={add} className="grid grid-cols-2 gap-2 rounded-2xl bg-emerald-900/60 p-4 sm:grid-cols-6">
           <input required placeholder="name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className="rounded-lg bg-emerald-950 px-2 py-2" />
           <input required placeholder="crop" value={f.crop} onChange={(e) => setF({ ...f, crop: e.target.value })} className="rounded-lg bg-emerald-950 px-2 py-2" />

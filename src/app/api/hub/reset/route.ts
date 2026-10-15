@@ -1,5 +1,6 @@
-// Hub demo reset (1.7/1.8): clears transactional rows so a rehearsal starts clean.
-// Suppliers (demo + full pools) are preserved. Hub key required. Audit-logged via response.
+// Hub reset is RETIRED on shared environments (2.0). It runs only when the server
+// explicitly opts in (ALLOW_DESTRUCTIVE_RESET=true) AND the caller declares a
+// disposable scope. Rehearsals create isolated fixtures instead of wiping history.
 import { supabase } from "@/lib/supabase";
 import { hubAuthorized } from "@/lib/auth/actor";
 import { json, err, statusOf } from "@/lib/http";
@@ -9,6 +10,10 @@ const TABLES = ["ledger_entries", "refunds", "paypal_events", "provider_operatio
 export async function POST(req: Request) {
   try {
     if (!hubAuthorized(req)) return err("Hub access required", 403);
+    const body = (await req.json().catch(() => ({}))) as { scope?: string };
+    if (process.env.ALLOW_DESTRUCTIVE_RESET !== "true" || body.scope !== "disposable") {
+      return err("Reset retired: isolated fixtures only. Rehearsals must not delete shared financial history.", 403);
+    }
     const sb = supabase();
     for (const t of TABLES) {
       const { error } = await sb.from(t).delete().neq("id", "00000000-0000-0000-0000-000000000000");

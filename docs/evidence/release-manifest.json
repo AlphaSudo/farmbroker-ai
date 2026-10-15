@@ -1,0 +1,40 @@
+{
+  "commit": "ce3d468db2bd5f062fb38afef040ed1e44913698",
+  "tag": "v2.9",
+  "builtAt": "2026-10-15T16:25:41.569Z",
+  "migrations": [
+    "001_schema.sql",
+    "002_transaction_integrity.sql",
+    "003_agent_runs.sql",
+    "004_quote_contracts.sql",
+    "005_supply_reservations.sql",
+    "006_payment_lifecycle.sql",
+    "007_quality_recovery.sql",
+    "008_regression_fixes.sql",
+    "009_provider_reconciliation.sql",
+    "010_atomic_recovery.sql",
+    "011_supply_snapshots.sql",
+    "012_decision_contracts.sql",
+    "013_provider_inbox.sql",
+    "014_native_jobs.sql",
+    "015_planning_policy.sql",
+    "016_recovery_entitlements.sql",
+    "017_order_summaries.sql"
+  ],
+  "regions": {
+    "app": "https://farmbroker-aii.vercel.app",
+    "db": "supabase (Ireland region to verify at release)"
+  },
+  "models": {
+    "primary": "env:AI_MODEL_PRIMARY",
+    "fallback": "env:AI_MODEL_SECONDARY",
+    "prompt": "p1",
+    "policy": "v1/v2"
+  },
+  "fixtures": [
+    "happy-path",
+    "quality-recovery",
+    "refund-required"
+  ],
+  "notes": "No secrets in this file. Provider/model availability rechecked at release."
+}

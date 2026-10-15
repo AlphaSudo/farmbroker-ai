@@ -1,14 +1,15 @@
-// One-shot DB setup: runs supabase/migrations/001_schema.sql + demo seed.
-// Usage: node scripts/migrate.mjs (from farmbroker-ai/)
-// Password: reads pal/credentials.txt (gitignored, outside repo) or DATABASE_URL env.
-// If direct connection fails, paste the SQL file in Supabase SQL editor instead.
-import { readFileSync, existsSync } from "node:fs";
+// Bootstrap: applies supabase/migrations/*.sql in numeric order with checksum tracking.
+// Usage: DATABASE_URL=... node scripts/migrate.mjs  (falls back to pal/credentials.txt + SUPABASE_URL)
+// Fresh clones need only the repo + DATABASE_URL. Checksum mismatch stops with an error.
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
+const dir = join(root, "supabase", "migrations");
 
 function envFile(path) {
   const out = {};
@@ -31,26 +32,30 @@ if (!databaseUrl) {
   databaseUrl = `postgres://postgres:${encodeURIComponent(pwd)}@db.${ref}.supabase.co:5432/postgres`;
 }
 
-const sql = readFileSync(join(root, "supabase", "migrations", "001_schema.sql"), "utf8");
+const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
 const db = new pg.Client({ connectionString: databaseUrl, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 15000 });
 await db.connect();
-await db.query(sql);
-
-const { rows } = await db.query("select count(*)::int as n from suppliers where pool='demo'");
-if (rows[0].n === 0) {
-  await db.query(
-    `insert into suppliers (name,crop,quantity_kg,min_price,available_date,location,quality_score,pool) values
-     ('Ahmed','Mint',2000,7.0,CURRENT_DATE+3,'Menoufia',92,'demo'),
-     ('Mohamed','Mint',3000,7.5,CURRENT_DATE+3,'Menoufia',88,'demo'),
-     ('Ali','Mint',5000,7.3,CURRENT_DATE+3,'Giza',90,'demo')`
-  );
-  await db.query(
-    `insert into buyer_requests (buyer_name,crop,quantity_kg,delivery_days,max_price,status) values
-     ('Cairo Foods','Mint',10000,7,9,'open')`
-  );
-  console.log("seeded demo pool (3 suppliers + 1 buyer)");
-} else {
-  console.log("demo pool already seeded, skipped");
+await db.query(`create table if not exists schema_migrations (version text primary key, checksum text not null, applied_at timestamptz not null default now())`);
+const { rows: done } = await db.query("select version, checksum from schema_migrations");
+const seen = new Map(done.map((r) => [r.version, r.checksum]));
+for (const f of files) {
+  const sql = readFileSync(join(dir, f), "utf8");
+  const sum = createHash("sha256").update(sql).digest("hex");
+  if (seen.has(f)) {
+    if (seen.get(f) !== sum) throw new Error(`Checksum mismatch on applied migration ${f} — resolve manually, never edit applied history.`);
+    console.log(`skip ${f} (applied, checksum ok)`);
+    continue;
+  }
+  await db.query("begin");
+  try {
+    await db.query(sql);
+    await db.query("insert into schema_migrations (version, checksum) values ($1, $2)", [f, sum]);
+    await db.query("commit");
+    console.log(`applied ${f}`);
+  } catch (e) {
+    await db.query("rollback");
+    throw e;
+  }
 }
 await db.end();
 console.log("migrate ok");

@@ -1,0 +1,15 @@
+// Held-out planning briefs (2.5/2.8): ambiguity, units, budget, priorities, disruption.
+{
+  "briefs": [
+    { "id": "h1", "text": "10 tons of Mint within seven days", "expect": { "kg": 10000, "clarify": false } },
+    { "id": "h2", "text": "10 bags of mint next week", "expect": { "kg": 0, "clarify": true } },
+    { "id": "h3", "text": "5000kg basil, 10 days, max 12 per kg, prefer fewer deliveries", "expect": { "kg": 5000, "clarify": false } },
+    { "id": "h4", "text": "mint 3 tons", "expect": { "kg": 3000, "clarify": false } },
+    { "id": "h5", "text": "20 T lettuce, two weeks, cheapest wins", "expect": { "kg": 20000, "clarify": false } },
+    { "id": "h6", "text": "some mint soon, price?", "expect": { "kg": 0, "clarify": true } },
+    { "id": "h7", "text": "8000 kg mint in 5 days, diversify suppliers", "expect": { "kg": 8000, "clarify": false } },
+    { "id": "h8", "text": "100kg basil tomorrow", "expect": { "kg": 100, "clarify": false } },
+    { "id": "h9", "text": "mint for $5000 total", "expect": { "kg": 0, "clarify": true } },
+    { "id": "h10", "text": "15 metric tons mint, 30 days, reliable lots only", "expect": { "kg": 15000, "clarify": false } }
+  ]
+}

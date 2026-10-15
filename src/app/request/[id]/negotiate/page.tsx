@@ -10,6 +10,8 @@ export default function NegotiatePage({ params }: { params: Promise<{ id: string
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [agreed, setAgreed] = useState<number | null>(null);
+  const [revisionId, setRevisionId] = useState("");
+  const [binding, setBinding] = useState("");
   useEffect(() => { params.then((x) => setId(x.id)); }, [params]);
 
   async function send(e: React.FormEvent) {
@@ -43,7 +45,24 @@ export default function NegotiatePage({ params }: { params: Promise<{ id: string
         <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Can you do 7.5?" className="flex-1 rounded-full bg-emerald-900/60 px-4 py-3" />
         <button disabled={busy} className="rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950 disabled:opacity-50">Send</button>
       </form>
-      {agreed !== null && <a href={`/request/${id}/quote`} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Accept {agreed} EGP/kg → Quote</a>}
+      {agreed !== null && !revisionId && (
+        <button onClick={async () => {
+          setBinding("Creating binding revision…");
+          const r = await fetch("/api/counteroffers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: id, offered: agreed }) });
+          const d = await r.json();
+          if (r.ok && d.revisionId) { setRevisionId(d.revisionId); setBinding(`${d.decision}: ${d.reason}`); }
+          else setBinding(d.error ?? "failed");
+        }} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Bind {agreed} EGP/kg as revision →</button>
+      )}
+      {binding && <p className="text-sm text-amber-200">{binding}</p>}
+      {revisionId && (
+        <button onClick={async () => {
+          const r = await fetch(`/api/quotes/${revisionId}/accept`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: id }) });
+          const d = await r.json();
+          setBinding(r.ok ? "Revision accepted — this is now the charged contract." : d.error);
+          if (r.ok) window.location.href = `/request/${id}/quote`;
+        }} className="w-fit rounded-full border border-amber-500/60 px-6 py-3 text-amber-300">Accept revision (binds checkout)</button>
+      )}
     </Shell>
   );
 }
