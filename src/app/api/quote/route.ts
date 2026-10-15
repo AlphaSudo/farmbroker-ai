@@ -3,6 +3,7 @@ import { riskAgent } from "@/lib/agents/risk";
 import { eligibleKg } from "@/lib/domain/eligibility";
 import { loadRequest, assertBuyer } from "@/lib/auth/guard";
 import { json, err, statusOf } from "@/lib/http";
+import { quoteEconomics } from "@/lib/domain/contracts";
 import { availableSupply } from "@/lib/domain/supply";
 import { num } from "@/lib/types";
 
@@ -13,7 +14,8 @@ export async function POST(req: Request) {
     if (!requestId) return err("requestId required");
     const request = await loadRequest(requestId);
     await assertBuyer(req, request);
-    const sel = await availableSupply(request);
+    let sel = await availableSupply(request);
+    if (eligibleKg(sel) >= request.quantity_kg) sel = (await quoteEconomics(request)).supply;
     const analysis = riskAgent(request, sel.eligible);
     if (eligibleKg(sel) < request.quantity_kg) {
       return json({ quote: { ...pricingAgent(request, analysis, sel.eligible), quotable: false, reason: "Insufficient eligible on-time supply — no guaranteed quote." }, log: ["Pricing Agent: blocked — coverage shortfall."] });

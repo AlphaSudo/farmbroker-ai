@@ -45,7 +45,7 @@ export async function replacementCandidates(dealId: string): Promise<Plan[]> {
 
 }
 
-export async function commitRecovery(incidentId: string, candidateId: string, model: string | null, opKey: string) {
+export async function commitRecovery(incidentId: string, candidateId: string, model: string | null, opKey: string, job?: { id: string; token: string }) {
   const sb = supabase();
   const { data: incident, error } = await sb.from("shortage_incidents").select("*").eq("id", incidentId).single();
   if (error || !incident) throw Object.assign(new Error("Incident not found"), { status: 404 });
@@ -57,7 +57,7 @@ export async function commitRecovery(incidentId: string, candidateId: string, mo
   const candidates = await replacementCandidates(inc.deal_id);
   const plan = candidates.find((c) => c.id === candidateId);
   if (!plan) throw Object.assign(new Error("Unknown/infeasible replacement candidate"), { status: 422 });
-  const result = await sb.rpc("commit_recovery_plan", { p_incident: incidentId, p_plan: plan, p_model: model, p_op_key: opKey });
+  const result = await sb.rpc(job ? "commit_job_recovery" : "commit_recovery_plan", { p_incident: incidentId, p_plan: plan, p_model: model, p_op_key: opKey, ...(job ? { p_job: job.id, p_token: job.token } : {}) });
   if (result.error) throw Object.assign(new Error(result.error.message), { status: 409 });
   return result.data;
 

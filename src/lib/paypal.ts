@@ -105,6 +105,9 @@ export async function verifyCapture(orderId: string, expectedUsd: string, mercha
   const pu = o.purchase_units?.[0];
   const cap = pu?.payments?.captures?.[0];
   const payeeEmail = pu?.payee?.email_address ?? "";
+  if (pu?.amount?.value !== expectedUsd || pu.amount.currency_code !== "USD" || !merchantEmail || payeeEmail.toLowerCase() !== merchantEmail.toLowerCase() || (expectedDealId && pu.custom_id !== expectedDealId)) {
+    return { ok: false, captureId: "", status: o.status, amount: "", currency: "", payeeEmail, reason: "order amount/payee/deal binding mismatch" };
+  }
   if (!cap) return { ok: false, captureId: "", status: o.status, amount: "", currency: "", payeeEmail, reason: "no capture on order" };
   if (cap.status !== "COMPLETED") return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: `capture status ${cap.status}` };
   if (cap.amount.value !== expectedUsd || cap.amount.currency_code !== "USD") return { ok: false, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail, reason: "amount/currency mismatch" };
@@ -125,7 +128,7 @@ export async function refundCapture(captureId: string, usdValue: string, request
       body: JSON.stringify({ amount: { currency_code: "USD", value: usdValue } }),
     });
     if (!res.ok) await providerError(res, "refund");
-    return (await res.json()) as { id: string; status: string };
+    return (await res.json()) as { id: string; status: string; amount?: { value: string; currency_code: string } };
   });
 }
 
@@ -133,7 +136,7 @@ export async function getRefund(refundId: string) {
   const access = await getAccessToken();
   const res = await fetchWithTimeout(`${BASE}/v2/payments/refunds/${refundId}`, { headers: { Authorization: `Bearer ${access}` } });
   if (!res.ok) throw new Error(`Refund lookup failed (${res.status})`);
-  return (await res.json()) as { id: string; status: string };
+  return (await res.json()) as { id: string; status: string; amount?: { value: string; currency_code: string } };
 }
 
 async function providerError(res: Response, operation: string): Promise<never> {

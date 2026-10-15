@@ -13,7 +13,7 @@ create index if not exists attempts_deal_idx on payment_attempts (deal_id);
 -- One bounded snapshot RPC: scalar feasibility + candidate rows + exclusion counts.
 -- Totals are computed over ALL eligible lots; the 256-row cap bounds transfer only.
 create or replace function get_supply_snapshot(
-  p_crop text, p_pool text, p_fixture text, p_deadline date, p_include_backup boolean, p_cap int
+  p_crop text, p_pool text, p_fixture uuid, p_deadline date, p_include_backup boolean, p_cap int
 ) returns jsonb language sql stable as $$
 with lots as (
   select s.id, s.crop, s.quantity_kg, s.min_price, s.available_date, s.quality_score, s.location,
@@ -41,9 +41,9 @@ ranked as (
 select jsonb_build_object(
   'feasible_total_kg', coalesce((select total_kg from ranked limit 1), 0),
   'lot_count', coalesce((select total_lots from ranked limit 1), 0),
-  'truncated', coalesce((select total_lots from ranked limit 1), 0) > greatest(p_cap, 0),
-  'candidates', coalesce((select jsonb_agg(jsonb_build_object('supplier_id', id, 'kg', free_kg, 'rate', min_price, 'quality', quality_score, 'location', location) order by rn) from ranked where rn <= greatest(p_cap, 0)), '[]'::jsonb),
+  'truncated', coalesce((select total_lots from ranked limit 1), 0) > least(256,greatest(coalesce(p_cap,256),0)),
+  'candidates', coalesce((select jsonb_agg(jsonb_build_object('supplier_id', id, 'kg', free_kg, 'rate', min_price, 'quality', quality_score, 'location', location) order by rn) from ranked where rn <= least(256,greatest(coalesce(p_cap,256),0))), '[]'::jsonb),
   'policy', 'fixture+ crop/pool/deadline/backup/quarantine; null dates on-time per fixture policy',
-  'cap', greatest(p_cap, 0)
+  'cap', least(256,greatest(coalesce(p_cap,256),0))
 );
 $$;

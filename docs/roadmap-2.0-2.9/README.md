@@ -1,6 +1,6 @@
 # FarmBroker AI — 2.0–2.9 engineering and competition roadmap
 
-Planning date: October 15, 2026. Reviewed application: `ce3d468`. **Everything in this roadmap is proposed. Unchecked work is not shipped functionality.**
+Planning date: October 15, 2026; original reviewed application: `ce3d468`. Implementation landed in `935b614` and an October 16 operational hotfix. **This remains the target specification, not a completion certificate.** See the [release audit, verified checks, and remaining gates](../evidence/v2.9-release-audit-2026-10-16.md). Unchecked work and unmeasured targets are not completed capabilities.
 
 ## The recommendation
 

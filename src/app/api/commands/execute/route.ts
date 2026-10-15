@@ -12,10 +12,9 @@ export async function POST(req: Request) {
     const { data: deal } = await sb.from("deals").select("request_id").eq("id", body.dealId).single();
     if (!deal) return err("Deal not found", 404);
     await assertBuyer(req, await loadRequest((deal as { request_id: string }).request_id));
-    const { data: existing } = await sb.from("command_receipts").select("result").eq("command_id", body.commandId ?? opKeyOf(req, body)).maybeSingle();
-    if (existing) return json({ ...(existing as { result: object }).result, replayed: true });
+    const commandId = body.commandId ?? opKeyOf(req, body);
     const { data, error } = await sb.rpc("execute_bound_plan", {
-      p_command_id: body.commandId ?? opKeyOf(req, body),
+      p_command_id: commandId,
       p_deal_id: body.dealId, p_expected_version: body.expectedVersion, p_quote_id: body.quoteId,
       p_decision_id: body.decisionId, p_attempt: 1, p_op_key: opKeyOf(req, body),
     });
@@ -36,6 +35,9 @@ export async function GET(req: Request) {
     if (!commandId) return err("commandId required");
     const { data, error } = await supabase().from("command_receipts").select("command_id,deal_id,plan_hash,result,created_at").eq("command_id", commandId).single();
     if (error || !data) return err("Receipt not found", 404);
+    const deal = await supabase().from("deals").select("request_id").eq("id", data.deal_id).single();
+    if (deal.error || !deal.data) return err("Deal not found", 404);
+    await assertBuyer(req, await loadRequest(deal.data.request_id));
     return json({ receipt: data });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));

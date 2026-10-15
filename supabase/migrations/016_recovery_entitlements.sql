@@ -32,7 +32,8 @@ begin
  end if;
  if a.inspection_status<>'pending' or d.status not in ('procuring','covered','short') or d.outcome<>'pending' then raise exception 'inspection locked'; end if;
  if (p_decision->>'usable_kg')::numeric>least(a.allocated_kg,(p_input->>'weight_received_kg')::numeric) or (p_decision->>'usable_kg')::numeric<0 then raise exception 'usable quantity out of bounds'; end if;
- rate := case when a.allocated_kg>0 then a.cost/a.allocated_kg else 0 end;
+ rate := case when d.pricing_policy='v1-clearing' then d.clearing_per_kg
+              else coalesce(a.entitlement_rate,case when a.allocated_kg>0 then a.cost/a.allocated_kg else 0 end) end;
  insert into inspections(allocation_id,attempt,weight_received_kg,usable_kg,moisture_pct,visual_score,condition,decision,grade,op_key)
  values(a.id,a.attempt,(p_input->>'weight_received_kg')::numeric,(p_decision->>'usable_kg')::numeric,(p_input->>'moisture_pct')::numeric,(p_input->>'visual_score')::numeric,p_input->>'condition',p_decision->>'decision',p_decision->>'grade',p_op_key);
  update allocations set inspection_status=p_decision->>'decision',quality_grade=p_decision->>'grade',usable_kg=(p_decision->>'usable_kg')::numeric,
@@ -43,6 +44,10 @@ begin
  select quantity_kg into target from buyer_requests where id=d.request_id;
  if accepted>=target and not exists(select 1 from allocations where deal_id=d.id and inspection_status='pending') then
    update shortage_incidents set status='resolved' where deal_id=d.id and status in ('open','recovering');
+ end if;
+ if accepted<target and not exists(select 1 from allocations where deal_id=d.id and inspection_status='pending') then
+   insert into commerce_jobs(op_key,scope,kind,payload,deadline)
+   values('recovery:'||d.id||':'||a.attempt,d.id::text,'recovery_advance',jsonb_build_object('dealId',d.id),now()+interval '24 hours') on conflict(op_key) do nothing;
  end if;
  insert into deal_events(deal_id,type,payload,op_key) values(d.id,'lot_inspected',p_decision,p_op_key||':event');
  return p_decision;

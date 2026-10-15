@@ -8,7 +8,7 @@ We sell **Guaranteed Supply**: buyer asks for 10 Tons Mint, the platform handles
 
 Next program: [2.0–2.9 architecture, performance, product, and evidence roadmap](docs/roadmap-2.0-2.9/README.md), based on the [expanded source review](docs/roadmap-2.0-2.9/source-review.md). Each iteration has an implementation plan and detailed checklist. The [1.1–1.9 roadmap](docs/roadmap/README.md) remains the earlier planning record.
 
-**Verified baseline:** 57 reachable production checks, six domain regressions, and 18 database integration checks passed. Database integration used provider stubs inside a rolled-back transaction. Actual sandbox approval succeeded, but capture remains blocked by `COMPLIANCE_VIOLATION`; six paid live scenarios remain unverified. See [corrections and evidence](docs/regression-fixes-2026-10-15.md). All 2.x work is proposed, not implemented.
+**Release audit:** the 2.x code is present, but “fully implemented” exceeds the retained proof. The October 16 hotfix passes the production build, 30 offline evals, six domain regressions, 35 rolled-back database checks with explicit provider/model stubs, and 12 offline signature-mechanics checks. Positive live capture/recovery/refund and declared load targets remain release gates. See the [v2.9 audit and remaining work](docs/evidence/v2.9-release-audit-2026-10-16.md) and the [earlier production evidence](docs/regression-fixes-2026-10-15.md).
 
 ## Run it
 
@@ -39,12 +39,12 @@ Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@bu
 ## Tools used
 
 - **PayPal Sandbox**: Orders v2 API and JS SDK buttons. Create/approval are verified; actual capture/refund remain provider-blocked. No verified capture means no supplier commitment.
-- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling; retained provider checks used `nvidia/nemotron-3.5-lightning:free`. Initial procurement still uses an independent allocation routine; binding the selected AI plan to execution is a 2.2 priority.
+- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling; retained provider checks used `nvidia/nemotron-3.5-lightning:free`. Selected decisions bind new quotes and execution; existing unbound contracts retain manual provenance. Positive live paid binding remains pending.
 
 ## Kill test (demonstrated checks)
 
 - Without PayPal confirmation, no procurement commits (verified-paid gate, 403 otherwise).
-- Without valid model output, autonomous plan selection/recovery planning pauses. Binding initial procurement to that decision remains pending in 2.2; deterministic reads and explicitly labeled manual operations remain available.
+- Without valid model output, new autonomous plan selection/recovery planning pauses. Bound contracts require their valid matching decision; deterministic reconciliation and explicitly labeled legacy manual operations remain available.
 
 ## Capability table
 

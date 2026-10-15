@@ -1,25 +1,32 @@
-# Native scheduler runbook (2.4) — dashboard steps the repo cannot perform itself
+# Native scheduler operation
 
-pg_cron/pg_net are available but uninstalled. A database owner runs once in the
-Supabase SQL editor:
+The SQL `commerce_jobs` queue is the single selected implementation. pg_cron/pg_net wake bounded Vercel Node workers; a browser is not the driver. No PGMQ queue is simultaneously active.
 
-```sql
-create extension if not exists pg_cron;
-create extension if not exists pg_net;
-select cron.schedule(
-  'farmbroker-wake-5min', '*/5 * * * *',
-  $$select net.http_post(
-    url := 'https://farmbroker-aii.vercel.app/api/internal/wake',
-    headers := '{"x-cron-secret": "<CRON_SECRET>"}'::jsonb
-  )$$
-);
+Apply all migrations first. Fresh clones use `DATABASE_URL`. An existing manually applied 001–010 database can explicitly adopt the reviewed baseline:
+
+```sh
+node scripts/migrate.mjs --baseline-through=010 --pooler=YOUR_POOLER_HOST --dry-run
+node scripts/migrate.mjs --baseline-through=010 --pooler=YOUR_POOLER_HOST
 ```
 
-Rules: `<CRON_SECRET>` lives in Supabase protected configuration **and** the Vercel
-`CRON_SECRET` env var — never in SQL files, docs, or footage. Vercel Hobby cron
-(daily) is insufficient for this schedule; Supabase Cron is the trigger, the wake
-route only enqueues bounded idempotent jobs, and `/api/internal/workers/run`
-(HUB_KEY or CRON_SECRET) executes them. Verify: `select * from cron.job;` and the
-queue health endpoint. If native activation is unavailable, the SQL `commerce_jobs`
-table + operator-triggered worker remains the documented fallback — never run both
-schedulers without disabling one.
+The local fallback reads ignored credentials; ordinary installations should provide `DATABASE_URL`. Checksums normalize CRLF to LF. Never adopt an unreviewed database or rewrite an applied migration.
+
+Set `CRON_SECRET` in Vercel production and the ignored `.env.production.local` configuration. Then provision the scheduler inactive:
+
+```sh
+node scripts/configure-scheduler.mjs --pooler=YOUR_POOLER_HOST
+```
+
+This enables pg_cron/pg_net, encrypts the existing secret in Supabase Vault, creates an owner-only function, and installs one inactive `farmbroker-wake-1min` job. SQL/docs/cron commands contain no secret literal.
+
+After the corrected deployment passes authenticated worker and webhook checks:
+
+```sh
+node scripts/configure-scheduler.mjs --pooler=YOUR_POOLER_HOST --enable
+```
+
+Each tick performs a bounded sweep and executes at most one job. Completion latency includes up to the scheduler interval plus queue delay; this is a modest demo operating mode, not a high-throughput worker benchmark. Independent worker calls still use SQL admission and fencing. Repeated compliance/binding errors reach review rather than an endless new-key retry.
+
+Verify `cron.job`, `cron.job_run_details`, HTTP delivery results, and the authenticated `GET /api/internal/workers/run` health endpoint. Prove browser independence with an isolated unpaid planning run and no browser advance request. Never use a forged paid row for this check.
+
+Operator fallback: authenticated `POST /api/internal/wake` or `POST /api/internal/workers/run`. If scheduling is disabled, disclose the fallback; do not claim independent progress. Keep only one recurring scheduler active.

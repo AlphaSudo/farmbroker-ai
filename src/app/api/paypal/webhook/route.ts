@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
-import { getAccessToken, getRefund } from "@/lib/paypal";
+import { getAccessToken } from "@/lib/paypal";
 import { verifyNativeSignature } from "@/lib/paypal-signature";
-import { recordEvent } from "@/lib/domain/events";
+import { hubAuthorized } from "@/lib/auth/actor";
 import { json, err, statusOf } from "@/lib/http";
 
 // POST /api/paypal/webhook — authenticity BEFORE trust/dedupe (2.3).
@@ -12,9 +12,11 @@ export async function POST(req: Request) {
     const webhookId = process.env.PAYPAL_WEBHOOK_ID;
     if (!webhookId) return err("Webhooks not configured (PAYPAL_WEBHOOK_ID missing).", 503);
     const raw = await req.text();
+    if (Buffer.byteLength(raw) > 524288) return err("Event too large", 413);
     const event = JSON.parse(raw) as { id?: string; event_type?: string; resource?: Record<string, unknown> };
     if (!event.id || !event.event_type) return err("Malformed event", 400);
-    const mode = new URL(req.url).searchParams.get("mode") ?? "native";
+    const mode = (hubAuthorized(req) ? new URL(req.url).searchParams.get("mode") : null) ?? process.env.PAYPAL_WEBHOOK_VERIFY_MODE ?? "native";
+    if (!["native", "postback", "compare"].includes(mode)) throw new Error("Invalid webhook verification mode");
     const native = await verifyNativeSignature({
       transmissionId: req.headers.get("paypal-transmission-id"),
       transmissionTime: req.headers.get("paypal-transmission-time"),
@@ -28,7 +30,7 @@ export async function POST(req: Request) {
     if (mode !== "native") {
       const access = await getAccessToken();
       const verify = await fetch("https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature", {
-        method: "POST",
+        method: "POST", signal: AbortSignal.timeout(15000),
         headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           transmission_id: req.headers.get("paypal-transmission-id"),
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
           webhook_id: webhookId, webhook_event: event,
         }),
       });
+      if (!verify.ok) throw new Error("PayPal signature postback unavailable");
       const { verification_status } = (await verify.json()) as { verification_status?: string };
       const postback = verification_status === "SUCCESS";
       if (mode === "compare" && postback !== native.ok) {
@@ -48,41 +51,9 @@ export async function POST(req: Request) {
       if (mode === "compare") method = `native+postback:${native.ok === postback ? "agree" : "DISAGREE"}`;
     }
     if (!authentic) return err(`Invalid webhook signature (${native.reason ?? "postback rejected"})`, 401);
-    const sb = supabase();
-    const { data: seen } = await sb.from("paypal_events").select("id,processed").eq("event_id", event.id).maybeSingle();
-    if (seen && (seen as { processed: string }).processed === "processed") return json({ ok: true, replayed: true });
-    if (!seen) await sb.from("paypal_events").insert({ event_id: event.id, type: event.event_type, payload: { ...event, verified_by: method }, processed: "received" });
-    const resource = event.resource ?? {};
-    if (event.event_type === "CHECKOUT.ORDER.APPROVED") {
-      const orderId = resource.id as string | undefined;
-      if (orderId) {
-        const { data: attempt } = await sb.from("payment_attempts").select("deal_id").eq("provider_order_id", orderId).maybeSingle();
-        if (attempt) {
-          await sb.from("payment_attempts").update({ status: "approved" }).eq("provider_order_id", orderId).eq("status", "created");
-          await recordEvent((attempt as { deal_id: string }).deal_id, "order_approved", { orderId });
-        }
-      }
-    }
-    if (event.event_type === "PAYMENT.CAPTURE.COMPLETED") {
-      const custom = resource.custom_id as string | undefined;
-      if (custom) await recordEvent(custom, "capture_event", { event: event.id });
-    }
-    if (event.event_type === "PAYMENT.CAPTURE.REFUNDED") {
-      const refundId = (resource.id as string | undefined) ?? "";
-      if (refundId) {
-        const current = await getRefund(refundId).catch(() => null);
-        const { data: row } = await sb.from("refunds").select("id,deal_id").eq("provider_refund_id", refundId).maybeSingle();
-        if (row) {
-          const r = row as { id: string; deal_id: string };
-          if (current?.status === "COMPLETED") {
-            await sb.from("refunds").update({ status: "completed" }).eq("id", r.id);
-            await recordEvent(r.deal_id, "refunded", { refundId, via: "webhook" });
-          }
-        }
-      }
-    }
-    await sb.from("paypal_events").update({ processed: "processed" }).eq("event_id", event.id);
-    return json({ ok: true });
+    const saved = await supabase().rpc("ingest_paypal_event", { p_event: event, p_method: method });
+    if (saved.error) throw saved.error;
+    return json({ ...saved.data, queued: !saved.data?.replayed });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Webhook failed", statusOf(e));
   }

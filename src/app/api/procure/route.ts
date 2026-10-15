@@ -39,12 +39,18 @@ export async function POST(req: Request) {
     const d = deal as unknown as { id: string; status: string; request_id: string; version?: number; paypal_verified: unknown; accepted_quote_id?: string; buyer_requests: { owner_token: string; crop: string; quantity_kg: number; pool: string; delivery_days: number; created_at: string; fixture_id?: string | null } };
     await assertBuyer(req, d.buyer_requests);
     if (!d.paypal_verified) return err("Pay first — procurement starts only after verified PayPal capture.", 403);
-    if (body.decisionId) {
-      const { data: prior } = await sb.from("command_receipts").select("result").eq("command_id", body.commandId ?? opKey).maybeSingle();
-      if (prior) return json({ ...(prior as { result: object }).result, replayed: true, bound: true });
+    const accepted = await sb.from("quote_revisions").select("snapshot").eq("id", d.accepted_quote_id ?? "").maybeSingle();
+    if (accepted.error) throw accepted.error;
+    const boundDecision = accepted.data?.snapshot?.decision_id as string | undefined;
+    const decisionId = body.decisionId ?? boundDecision;
+    if (boundDecision && decisionId !== boundDecision) return err("Decision differs from accepted quote", 409);
+    if (decisionId) {
+      const commandId = body.commandId ?? body.opKey ?? req.headers.get("Idempotency-Key") ?? `procure:${d.id}:${decisionId}`;
+      const { data: prior, error: priorError } = await sb.from("command_receipts").select("expected_version").eq("command_id", commandId).eq("deal_id", d.id).maybeSingle();
+      if (priorError) throw priorError;
       const { data: rpc, error: rpcErr } = await sb.rpc("execute_bound_plan", {
-        p_command_id: body.commandId ?? opKey, p_deal_id: body.dealId,
-        p_expected_version: (d.version ?? 1), p_quote_id: body.quoteId ?? d.accepted_quote_id, p_decision_id: body.decisionId,
+        p_command_id: commandId, p_deal_id: body.dealId,
+        p_expected_version: prior?.expected_version ?? (d.version ?? 1), p_quote_id: body.quoteId ?? d.accepted_quote_id, p_decision_id: decisionId,
         p_attempt: 1, p_op_key: opKey,
       });
       if (rpcErr) {
@@ -52,8 +58,9 @@ export async function POST(req: Request) {
         throw rpcErr;
       }
       const r = rpc as { kg: number; cost: number; plan_hash: string; command: string };
-      const { data: after } = await sb.from("allocations").select("id", { count: "exact", head: true }).eq("deal_id", body.dealId);
-      return json({ ...buyerProgress(num(d.buyer_requests.quantity_kg), r.kg, after?.length ?? 0), status: "procuring", covered: true, bound: true, plan_hash: r.plan_hash, command: r.command, log: ["Bound plan executed: stored AI decision → committed items (hash matches receipt)."] });
+      const { count, error: countError } = await sb.from("allocations").select("id", { count: "exact", head: true }).eq("deal_id", body.dealId);
+      if (countError) throw countError;
+      return json({ ...buyerProgress(num(d.buyer_requests.quantity_kg), Number(r.kg), count ?? 0), status: "procuring", fully_covered: true, bound: true, plan_hash: r.plan_hash, command: r.command, log: ["Bound plan executed: stored AI decision → committed items (hash matches receipt)."] });
     }
     const { data: existing } = await sb.from("allocations").select("allocated_kg,inspection_status,usable_kg,weight_received_kg").eq("deal_id", body.dealId);
     if (existing && existing.length > 0) {

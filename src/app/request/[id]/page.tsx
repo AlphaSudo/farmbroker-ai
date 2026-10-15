@@ -12,7 +12,7 @@ export default function RequestDetail({ params }: { params: Promise<{ id: string
   const [id, setId] = useState("");
   const [data, setData] = useState<{ request?: Record<string, number | string | null> & { analysis?: { confidence: number } | null; status: string }; deal?: { id: string; status: string; outcome: string } | null } | null>(null);
   const [events, setEvents] = useState<Array<{ label: string; created_at: string }>>([]);
-  const [version, setVersion] = useState(0);
+  const [version, setVersion] = useState<string | number>(0);
   useEffect(() => { params.then((p) => setId(p.id)); }, [params]);
   useEffect(() => {
     if (!id) return;
@@ -53,7 +53,7 @@ export default function RequestDetail({ params }: { params: Promise<{ id: string
       <p className="w-fit rounded-full bg-emerald-900 px-4 py-1 font-semibold text-amber-300">{STATUS_LABELS[status] ?? status}</p>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card title="Order Status">{STATUS_LABELS[status] ?? status}</Card>
-        <Card title="Confidence Score">{a ? `${a.confidence}%` : "— run analysis"}</Card>
+        <Card title="Feasibility score">{a ? `${a.confidence}/100` : "- run analysis"}</Card>
         <Card title="Expected Delivery">{`${r.delivery_days} days`}</Card>
         <Card title="Payment Status">{deal ? deal.status : "Unpaid"}</Card>
       </div>

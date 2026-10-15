@@ -39,7 +39,7 @@ export async function advancePlanRun(runId: string, opKey: string) {
     let ai: { text: string; model: string } | null = null;
     let sharedCall = false;
     if (!aiOff()) {
-      const called = await singleFlight(`plan:${planningKey({ c: candidates.map(c => c.id), policy: "v1" })}`, () =>
+      const called = await singleFlight(`plan:${planningKey({ requestId: r.request_id, snapshot: r.snapshot, candidates, prompt, model: process.env.AI_MODEL_PRIMARY, fallback: process.env.AI_MODEL_SECONDARY, policy: "v1", promptVersion: "p1" })}`, () =>
         chatJSON("Select one feasible procurement plan ID. Never invent suppliers, quantities, or prices. Reply JSON only.", prompt));
       ai = called.result; sharedCall = called.shared;
     }

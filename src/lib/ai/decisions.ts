@@ -14,8 +14,8 @@ export async function snapshotFor(requestId: string) {
   const sb = supabase();
   const { data: r, error } = await sb.from("buyer_requests").select("*").eq("id", requestId).single();
   if (error || !r) throw new Error("request not found");
-  const req = r as { crop: string; quantity_kg: number; delivery_days: number; max_price: number; pool: string; scenario: string };
-  const spec = { crop: req.crop, quantity_kg: Number(req.quantity_kg), delivery_days: req.delivery_days, pool: req.pool, scenario: req.scenario, spec_version: 1 };
+  const req = r as { crop: string; quantity_kg: number; delivery_days: number; max_price: number; pool: string; scenario: string; fixture_id?: string | null };
+  const spec = { crop: req.crop, quantity_kg: Number(req.quantity_kg), delivery_days: req.delivery_days, max_price: Number(req.max_price), pool: req.pool, fixture_id: req.fixture_id ?? null, scenario: req.scenario, spec_version: 1 };
   const spec_hash = hashOf(spec);
   const { data: same } = await sb.from("planning_snapshots").select("id").eq("request_id", requestId).eq("spec_hash", spec_hash).limit(1).maybeSingle();
   if (same) return same as { id: string };
@@ -29,7 +29,7 @@ export async function plansFor(snapshotId: string, candidates: Candidate[]) {
   const out: Array<{ id: string; plan_hash: string; items: Candidate["items"]; strategy: string; cost_total: number }> = [];
   for (const c of candidates) {
     const items = [...c.items].sort((a, b) => (a.supplier_id < b.supplier_id ? -1 : 1)).map((i) => ({ supplier_id: i.supplier_id, kg: i.kg, rate: i.rate }));
-    const plan_hash = hashOf({ items, total_kg: c.total_kg });
+    const plan_hash = hashOf({ snapshot_id: snapshotId, items, total_kg: c.total_kg });
     const { data: same } = await sb.from("procurement_plans").select("id").eq("plan_hash", plan_hash).limit(1).maybeSingle();
     if (same) { out.push({ id: (same as { id: string }).id, plan_hash, items, strategy: c.strategy, cost_total: c.cost_total }); continue; }
     const { data, error } = await sb.from("procurement_plans").insert({ snapshot_id: snapshotId, strategy: c.strategy, items, cost_total: c.cost_total, plan_hash }).select("id").single();
@@ -46,7 +46,7 @@ export async function recordDecision(input: { runId: string | null; requestId: s
   const ids = input.candidates.map((c) => c.id);
   if (!ids.includes(input.selection.candidate_id)) throw new Error("selection outside stored feasible set");
   const plan = plans.find((p, i) => input.candidates[i].id === input.selection.candidate_id)!;
-  const candidate_hash = hashOf([...ids].sort());
+  const candidate_hash = hashOf(plans.map(p => p.plan_hash).sort());
   const { data, error } = await sb.from("decision_records").insert({
     run_id: input.runId, request_id: input.requestId, spec_version: 1, policy_version: "v1",
     model: input.model, prompt_version: input.promptVersion ?? "p1",

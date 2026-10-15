@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { pricingAgent } from "@/lib/agents/pricing";
 import { riskAgent } from "@/lib/agents/risk";
-import { availableSupply } from "@/lib/domain/supply";
+import { quoteEconomics } from "@/lib/domain/contracts";
 import { eligibleKg } from "@/lib/domain/eligibility";
 import { createRevision, acceptRevision } from "@/lib/domain/revisions";
 import { loadRequest, assertBuyer } from "@/lib/auth/guard";
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     const existing = await supabase().from("deals").select("*").eq("request_id", requestId).maybeSingle();
     if (existing.error) throw existing.error;
     if (existing.data) return json({ deal: buyerDeal(existing.data) });
-    const sel = await availableSupply(request);
+    const { supply: sel } = await quoteEconomics(request);
     if (eligibleKg(sel) < Number(request.quantity_kg)) return err("Insufficient eligible on-time supply - cannot sell this promise.", 422);
     const quote = pricingAgent(request, riskAgent(request, sel.eligible), sel.eligible);
     if (!quote.quotable || quote.per_kg > Number(request.max_price)) return err("Over budget or not quotable.", 422);

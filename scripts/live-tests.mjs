@@ -74,7 +74,16 @@ try {
   const hub = await http("/api/hub/queue", { hub: true });
   check("Hub queue accepts configured key", hub.status === 200, summary(hub));
   const webhook = await post("/api/paypal/webhook", {});
-  check("Unconfigured webhook fails honestly with 503", webhook.status === 503, summary(webhook));
+  check(env.PAYPAL_WEBHOOK_ID ? "Configured webhook rejects malformed unsigned event" : "Unconfigured webhook fails honestly with 503", webhook.status === (env.PAYPAL_WEBHOOK_ID ? 400 : 503), summary(webhook));
+  if (env.PAYPAL_WEBHOOK_ID) {
+    const id = `UNSIGNED-TEST-${randomUUID()}`;
+    const unsigned = await post("/api/paypal/webhook", { id, event_type: "PAYMENT.CAPTURE.COMPLETED", resource: {} });
+    check("Configured webhook rejects unsigned event", unsigned.status === 401, summary(unsigned));
+    const poisoned = await sb.from("paypal_events").select("id").eq("event_id", id);
+    check("Unsigned event cannot poison the verified inbox", !poisoned.error && poisoned.data.length === 0);
+  }
+  check("Worker rejects anonymous", (await post("/api/internal/workers/run", {})).status === 403);
+  check("Wake rejects anonymous", (await post("/api/internal/wake", {})).status === 403);
   const invalid = await post("/api/requests", { buyer_name: "E2E invalid", crop: "Mint", quantity_kg: -1, delivery_days: 7, max_price: 9 });
   check("Negative request quantity rejected", invalid.status === 400, summary(invalid));
 
@@ -147,6 +156,13 @@ try {
   const run = await post("/api/runs", { requestId: buyer.id }, buyer.actor);
   check("Buyer can create a persisted AI run", run.status === 201 && !!run.data.runId, summary(run));
   if (run.data.runId) {
+    const job = await sb.from("commerce_jobs").select("id").eq("op_key", `plan:${run.data.runId}`).single();
+    check("Planning run and durable job are created together", !job.error && !!job.data?.id);
+    if (job.data?.id) {
+      check("Job polling rejects anonymous", (await http(`/api/commands/status?jobId=${job.data.id}`)).status === 403);
+      check("Job polling rejects another buyer", (await http(`/api/commands/status?jobId=${job.data.id}`, { actor: payment.actor })).status === 403);
+      check("Job polling permits the owner", (await http(`/api/commands/status?jobId=${job.data.id}`, { actor: buyer.actor })).status === 200);
+    }
     const ai = await post(`/api/runs/${run.data.runId}/advance`, { opKey: randomUUID() }, buyer.actor);
     check("Live AI selects a grounded plan", ai.status === 200 && /^Live AI/.test(ai.data.provenance ?? "") && ["cost-first", "reliability-first"].includes(ai.data.selection?.candidate_id), { ...summary(ai), elapsedMs: ai.elapsedMs, provenance: ai.data.provenance, selection: ai.data.selection?.candidate_id });
     if (ai.status === 200) check("Buyer AI response hides supplier identifiers", !JSON.stringify(ai.data).includes("supplier_id"));
@@ -185,7 +201,10 @@ try {
   }
 
   for (const name of ["Paid procurement and inventory concurrency", "Reject 2000kg and verify accepted coverage", "Commit and inspect live AI replacement", "Finalize settlement and simulated handover", "Capture separate refund fixture and reconcile actual refund", "Replay a completed capture/refund without duplicate financial effects"]) {
-    record(name, "blocked", { reason: "Primary sandbox order approved but capture rejected by PayPal COMPLIANCE_VIOLATION; no verified paid fixture exists." });
+    const paid = await sb.from("deals").select("paypal_capture_id,paypal_verified").eq("id", primaryDeal).single();
+    record(name, "blocked", { reason: paid.data?.paypal_verified && paid.data?.paypal_capture_id
+      ? "This unpaid harness does not run positive financial scenarios; use isolated approved paid fixtures for the separate live journey."
+      : "No verified primary capture exists. Last retained provider diagnosis was COMPLIANCE_VIOLATION; see the fresh capture diagnostic separately." });
   }
 } catch (e) {
   record("Harness execution", "fail", { reason: e instanceof Error ? e.message : String(e) });

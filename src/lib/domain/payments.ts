@@ -2,10 +2,9 @@ import { supabase } from "../supabase";
 import type { VerifiedCapture } from "../paypal";
 
 export async function saveVerifiedCapture(attemptId: string, orderId: string, proof: VerifiedCapture) {
-  return claimProviderOp("capture", `${attemptId}:${orderId}`).then(async (claim) => {
-    if (claim.replayed) return { replayed: true };
-    return recordCapture(attemptId, orderId, proof);
-  });
+  // The transactional capture receipt is authoritative. A pre-inserted operation
+  // row must never suppress recovery after a crash before the capture commit.
+  return recordCapture(attemptId, orderId, proof);
 }
 
 async function recordCapture(attemptId: string, orderId: string, proof: VerifiedCapture) {  if (!proof.ok) throw Object.assign(new Error(`Capture not verified: ${proof.reason}`), { status: 422 });

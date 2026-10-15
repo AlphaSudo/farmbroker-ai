@@ -1,7 +1,9 @@
 {
-  "commit": "ce3d468db2bd5f062fb38afef040ed1e44913698",
-  "tag": "v2.9",
-  "builtAt": "2026-10-15T16:25:41.569Z",
+  "commit": "935b6147c4233c23e67e8b82b0fd5519df8b4dca",
+  "tag": null,
+  "baseTag": "v2.9",
+  "workingTreeDirty": true,
+  "builtAt": "2026-10-15T23:51:52.616Z",
   "migrations": [
     "001_schema.sql",
     "002_transaction_integrity.sql",

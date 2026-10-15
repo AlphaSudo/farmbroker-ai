@@ -3,7 +3,7 @@ import { eligibleSuppliers, type EligibilityResult } from "./eligibility";
 import type { Supplier } from "../types";
 import { num } from "../types";
 
-export interface SupplyRequest { crop: string; pool: string; delivery_days: number; created_at: string; fixture_id?: string | null; }
+export interface SupplyRequest { crop: string; pool: string; delivery_days: number; created_at: string; fixture_id?: string | null; quantity_kg?: number; }
 export interface Snapshot extends EligibilityResult { totalKg: number; capped: boolean; source: "rpc" | "js"; }
 
 const CAP = 256;
@@ -57,5 +57,9 @@ export async function snapshotFor(request: SupplyRequest, includeBackup = false,
 }
 
 export async function availableSupply(request: SupplyRequest, includeBackup = false): Promise<Snapshot> {
-  return snapshotFor(request, includeBackup);
+  const s = await snapshotFor(request, includeBackup);
+  if (s.capped && request.quantity_kg && s.totalKg >= Number(request.quantity_kg) && s.eligible.reduce((sum, lot) => sum + num(lot.quantity_kg), 0) < Number(request.quantity_kg)) {
+    throw Object.assign(new Error("Supply exists but exceeds the synchronous planning limit; operator/background planning required."), { status: 409 });
+  }
+  return s;
 }

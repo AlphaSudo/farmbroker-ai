@@ -19,22 +19,27 @@ export const crc32 = (s: string): number => {
   return (c ^ 0xffffffff) >>> 0;
 };
 
-let certCache: { pem: string; exp: number } | null = null;
+const certCache = new Map<string, { pem: string; exp: number }>();
 
 async function fetchCert(url: string): Promise<string> {
   const u = new URL(url);
   if (u.protocol !== "https:") throw new Error("cert must be https");
-  if (!/(^|\.)paypal\.com$/.test(u.hostname) || !u.pathname.startsWith("/certs/")) throw new Error("cert origin/path rejected");
-  if (certCache && Date.now() < certCache.exp) return certCache.pem;
-  const res = await fetch(url, { redirect: "manual" });
+  const origins = new Set(["api.paypal.com", "api-m.paypal.com", "api.sandbox.paypal.com", "api-m.sandbox.paypal.com"]);
+  if (!origins.has(u.hostname) || !/^\/(?:v1\/notifications\/)?certs\/CERT-[a-zA-Z0-9-]+$/.test(u.pathname)
+    || u.username || u.password || u.port || u.search || u.hash) throw new Error("cert origin/path rejected");
+  const cached = certCache.get(url);
+  if (cached && Date.now() < cached.exp) return cached.pem;
+  const res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(8000) });
   if (res.status >= 300 && res.status < 400) throw new Error("cert redirect rejected");
   if (!res.ok) throw new Error(`cert fetch failed (${res.status})`);
   const pem = await res.text();
+  if (Buffer.byteLength(pem) > 65536) throw new Error("certificate too large");
   if (!pem.includes("BEGIN CERTIFICATE")) throw new Error("not a certificate");
   const x = new X509Certificate(pem);
   const now = new Date();
   if (new Date(x.validFrom) > now || new Date(x.validTo) < now) throw new Error("certificate outside validity");
-  certCache = { pem, exp: new Date(x.validTo).getTime() };
+  if (certCache.size >= 8) certCache.delete(certCache.keys().next().value!);
+  certCache.set(url, { pem, exp: Math.min(new Date(x.validTo).getTime(), Date.now() + 3600000) });
   return pem;
 }
 
@@ -44,7 +49,7 @@ export async function verifyNativeSignature(input: {
 }): Promise<{ ok: boolean; reason?: string }> {
   const { transmissionId, transmissionTime, certUrl, authAlgo, signature, webhookId, rawBody } = input;
   if (!transmissionId || !transmissionTime || !certUrl || !signature) return { ok: false, reason: "missing transmission headers" };
-  if (authAlgo && !/SHA256-RSA/i.test(authAlgo)) return { ok: false, reason: `unsupported algorithm ${authAlgo}` };
+  if (authAlgo !== "SHA256withRSA") return { ok: false, reason: "unsupported or missing algorithm" };
   try {
     const pem = await fetchCert(certUrl);
     const payload = `${transmissionId}|${transmissionTime}|${webhookId}|${crc32(rawBody)}`;

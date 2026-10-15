@@ -2,7 +2,7 @@
 // Workers never hold inventory locks during provider I/O; effects stay idempotent.
 import { supabase } from "../supabase";
 
-export type JobKind = "ai_plan" | "recovery_advance" | "reconcile_check";
+export type JobKind = "ai_plan" | "recovery_advance" | "reconcile_check" | "paypal_event" | "projection" | "procure_bound";
 
 export async function enqueueJob(kind: JobKind, scope: string, payload: object, opKey: string, expectedVersion?: number): Promise<{ id: string; replayed: boolean }> {
   const sb = supabase();
@@ -23,23 +23,14 @@ export async function enqueueJob(kind: JobKind, scope: string, payload: object, 
 }
 
 export async function completeJob(id: string, leaseToken: string, result: object): Promise<boolean> {
-  const { data, error } = await supabase().from("commerce_jobs")
-    .update({ status: "done", result, lease_token: null }).eq("id", id).eq("lease_token", leaseToken).eq("status", "leased")
-    .select("id").maybeSingle();
+  const { data, error } = await supabase().rpc("finish_commerce_job", { p_id: id, p_token: leaseToken, p_result: result, p_error: null });
   if (error) throw error;
   return !!data; // false = fencing: lease lost, result discarded
 }
 
 export async function failJob(id: string, leaseToken: string, errorText: string): Promise<void> {
-  const sb = supabase();
-  const { data: job } = await sb.from("commerce_jobs").select("attempt,max_attempts").eq("id", id).single();
-  const j = job as { attempt: number; max_attempts: number } | null;
-  const backoffMin = Math.min(60, 2 ** (j?.attempt ?? 1));
-  const review = (j?.attempt ?? 1) >= (j?.max_attempts ?? 5);
-  await sb.from("commerce_jobs").update({
-    status: review ? "review" : "queued", error: errorText, lease_token: null,
-    created_at: review ? undefined : new Date(Date.now() + (backoffMin * 60000 + Math.random() * 30000)).toISOString(),
-  } as never).eq("id", id).eq("lease_token", leaseToken);
+  const { error } = await supabase().rpc("finish_commerce_job", { p_id: id, p_token: leaseToken, p_result: null, p_error: errorText.slice(0, 1000) });
+  if (error) throw error;
 }
 
 export async function jobHealth() {

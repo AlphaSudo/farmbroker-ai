@@ -23,6 +23,6 @@ export function buildRepair(input: RepairInput): { plan: Plan | null; spendMinor
   const [plan] = candidatePlans(ordered, input.missingKg);
   if (!plan) return { plan: null, spendMinor: 0 };
   const spendMinor = Math.round(plan.items.reduce((s, i) => s + i.kg * i.rate, 0) * 100);
-  if (spendMinor > input.maxSpend && input.maxSpend > 0) return { plan: null, spendMinor };
+  if (!Number.isSafeInteger(input.maxSpend) || input.maxSpend < 0 || spendMinor > input.maxSpend) return { plan: null, spendMinor };
   return { plan, spendMinor };
 }

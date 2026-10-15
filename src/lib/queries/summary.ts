@@ -3,6 +3,7 @@
 import { supabase } from "../supabase";
 import { buyerDeal } from "../serializers/buyer";
 import { num } from "../types";
+import { acceptedKg, committedKg } from "../domain/coverage";
 
 const LABELS: Record<string, string> = {
   quote_accepted: "Quote accepted", plan_reserved: "Supply plan reserved", plan_executed: "Supply plan executed",
@@ -19,15 +20,20 @@ export async function buildSummary(requestId: string) {
   const { owner_token: _o, ...safe } = request as Record<string, unknown>;
   void _o;
   const { data: deal } = await sb.from("deals").select("*").eq("request_id", requestId).maybeSingle();
-  let progress = null as null | { target: number; covered: number; remaining: number };
+  let progress = null as null | { target: number; covered: number; accepted: number; remaining: number };
   let events: Array<{ label: string; created_at: string }> = [];
+  let version = `${request.status}`;
   if (deal) {
     const d = deal as { id: string };
-    const { data: al } = await sb.from("allocations").select("allocated_kg").eq("deal_id", d.id);
-    const covered = ((al ?? []) as Array<{ allocated_kg: number }>).reduce((s, a) => s + num(a.allocated_kg), 0);
-    progress = { target: num(req.quantity_kg), covered, remaining: Math.max(0, num(req.quantity_kg) - covered) };
-    const { data: ev } = await sb.from("deal_events").select("type,created_at").eq("deal_id", d.id).order("created_at").limit(30);
+    const al = await sb.from("allocations").select("allocated_kg,inspection_status,usable_kg,weight_received_kg").eq("deal_id", d.id);
+    if (al.error) throw al.error;
+    const covered = (al.data ?? []).reduce((s, a) => s + committedKg(a), 0);
+    const accepted = (al.data ?? []).reduce((s, a) => s + acceptedKg(a), 0);
+    progress = { target: num(req.quantity_kg), covered, accepted, remaining: Math.max(0, num(req.quantity_kg) - covered) };
+    const { data: ev, error: eventError, count } = await sb.from("deal_events").select("type,created_at", { count: "exact" }).eq("deal_id", d.id).order("created_at", { ascending: false }).limit(30);
+    if (eventError) throw eventError;
+    version = `${(deal as { version?: number }).version ?? 1}:${count ?? 0}:${(deal as { status: string }).status}:${(deal as { outcome?: string }).outcome ?? "pending"}`;
     events = ((ev ?? []) as Array<{ type: string; created_at: string }>).map((e) => ({ label: LABELS[e.type] ?? e.type, created_at: e.created_at }));
   }
-  return { request: safe, deal: deal ? buyerDeal(deal as never) : null, progress, events, version: events.length };
+  return { request: safe, deal: deal ? buyerDeal(deal as never) : null, progress, events, version };
 }
