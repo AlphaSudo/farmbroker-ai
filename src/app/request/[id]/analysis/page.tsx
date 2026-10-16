@@ -32,7 +32,7 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
           <p className="text-sm text-emerald-300">Sourced from FarmBroker Supply Network — supplier identities stay with the platform (GR#1). The score is a coverage heuristic, not a calibrated success probability.</p>
           <AgentLog lines={log} />
           {a.quotable
-            ? <a href={`/request/${id}/quote`} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Approve & Get Quote →</a>
+            ? <a href={`/request/${id}/plan`} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950">Select an AI supply plan →</a>
             : <p className="text-red-300">Not quotable — insufficient supply. Try a smaller quantity.</p>}
         </>
       )}

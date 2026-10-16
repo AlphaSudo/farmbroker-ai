@@ -10,7 +10,9 @@ export async function POST(req: Request) {
   try {
     if (!hubAuthorized(req) && !(process.env.CRON_SECRET && req.headers.get("x-cron-secret") === process.env.CRON_SECRET)) return err("Wake access required", 403);
     const sb = supabase();
-    const stuck = await sb.from("payment_attempts").select("id,deal_id").in("status", ["created", "approved", "capture_pending"]).lt("created_at", new Date(Date.now() - 10 * 60000).toISOString()).limit(20);
+    const recent = new Date(Date.now() - 30 * 60000).toISOString();
+    const stuck = await sb.from("payment_attempts").select("id,deal_id").in("status", ["created", "approved", "capture_pending"]).lt("created_at", new Date(Date.now() - 10 * 60000).toISOString())
+      .or(`status.neq.created,created_at.gt.${recent}`).limit(20);
     if (stuck.error) throw stuck.error;
     for (const a of stuck.data ?? []) await enqueueJob("reconcile_check", a.deal_id, { dealId: a.deal_id }, "wake:reconcile:" + a.id);
     const refunds = await sb.from("refunds").select("id,deal_id").in("status", ["requested", "pending", "needs_review"]).limit(20);

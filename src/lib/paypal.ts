@@ -98,7 +98,10 @@ export interface VerifiedCapture { ok: boolean; captureId: string; status: strin
 export async function verifyCapture(orderId: string, expectedUsd: string, merchantEmail: string, expectedDealId?: string): Promise<VerifiedCapture> {
   const access = await getAccessToken();
   const res = await fetchWithTimeout(`${BASE}/v2/checkout/orders/${orderId}`, { headers: { Authorization: `Bearer ${access}` } });
-  if (!res.ok) return { ok: false, captureId: "", status: "", amount: "", currency: "", payeeEmail: "", reason: `order lookup failed (${res.status})` };
+  if (!res.ok) {
+    if (res.status === 429 || res.status >= 500) throw Object.assign(new Error(`PayPal order lookup temporarily unavailable (${res.status}); retry reconciliation.`), { status: 502 });
+    return { ok: false, captureId: "", status: "", amount: "", currency: "", payeeEmail: "", reason: `order lookup failed (${res.status})` };
+  }
   const o = (await res.json()) as {
     status: string; purchase_units: Array<{ custom_id?: string; amount: { currency_code: string; value: string }; payee?: { email_address?: string }; payments?: { captures?: Array<{ id: string; status: string; amount: { value: string; currency_code: string } }> } }>;
   };

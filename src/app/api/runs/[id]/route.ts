@@ -13,7 +13,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     const role = await assertBuyer(req, request);
     const { data: steps } = await sb.from("agent_steps").select("kind,input,output,model,latency_ms,validation,created_at").eq("run_id", id).order("created_at");
     const { status, kind, policy_version, snapshot, lease_expires_at, attempts } = run as Record<string, unknown>;
-    return json({ run: { id, status, kind, policy_version, snapshot: role === "hub" ? snapshot : { selection: (snapshot as { selection?: unknown }).selection }, lease_expires_at, attempts }, steps: role === "hub" ? steps ?? [] : (steps ?? []).map(({ kind, model, latency_ms, validation, created_at }) => ({ kind, model, latency_ms, validation, created_at })) });
+    const detail = snapshot as { selection?: unknown; result?: { decisionId?: string; planHash?: string; provenance?: string } };
+    const buyerSnapshot = { selection: detail.selection, result: detail.result ? { decisionId: detail.result.decisionId, planHash: detail.result.planHash, provenance: detail.result.provenance } : undefined };
+    return json({ run: { id, status, kind, policy_version, snapshot: role === "hub" ? snapshot : buyerSnapshot, lease_expires_at, attempts }, steps: role === "hub" ? steps ?? [] : (steps ?? []).map(({ kind, model, latency_ms, validation, created_at }) => ({ kind, model, latency_ms, validation, created_at })) });
   } catch (e) {
     return err(e instanceof Error ? e.message : "Failed", statusOf(e));
   }

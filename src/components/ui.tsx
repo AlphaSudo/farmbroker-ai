@@ -20,7 +20,7 @@ export function AgentLog({ lines }: { lines: string[] }) {
 
 export function Stepper({ id, current }: { id: string; current: string }) {
   const steps: Array<[string, string]> = [
-    ["request", "Request"], ["analysis", "Analysis"], ["quote", "Quote"],
+    ["request", "Request"], ["analysis", "Analysis"], ["plan", "AI plan"], ["quote", "Quote"],
     ["pay", "Pay"], ["procure", "Procure"], ["quality", "Quality"], ["settlement", "Settlement"],
   ];
   return (
