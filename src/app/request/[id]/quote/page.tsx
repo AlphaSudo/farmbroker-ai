@@ -28,7 +28,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
   return (
     <Shell>
       <Stepper id={id} current="quote" />
-      <h1 className="text-3xl font-bold">AI Quote</h1>
+      <h1 className="text-3xl font-bold">Supply quote</h1>
       {!q && <p className="animate-pulse">Pricing Agent working…</p>}
       {q && !q.quotable && <p className="text-red-300">{q.reason}</p>}
       {q?.quotable && (

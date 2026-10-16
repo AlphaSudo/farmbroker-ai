@@ -10,10 +10,16 @@ export async function quoteEconomics(request: SupplyRequest & { id?: string; qua
   let binding: { decision_id: string; plan_hash: string } | null = null;
   if (request.id) {
     const sb = supabase();
-    const selected = await sb.from("decision_records").select("id,plan_id,plan_hash").eq("request_id", request.id)
-      .eq("status", "valid").not("model", "is", null).gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const selected = await sb.from("decision_records").select("id,plan_id,plan_hash,expires_at").eq("request_id", request.id)
+      .eq("status", "valid").not("model", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (selected.error) throw selected.error;
+    if (!selected.data) {
+      const started = await sb.from("agent_runs").select("id").eq("request_id", request.id).eq("kind", "plan_selection").limit(1).maybeSingle();
+      if (started.error) throw started.error;
+      if (started.data) throw Object.assign(new Error("AI plan is not ready; resume selection before quoting."), { status: 503 });
+    }
     if (selected.data) {
+      if (new Date(selected.data.expires_at).getTime() <= Date.now()) throw Object.assign(new Error("Selected decision expired; obtain a fresh AI plan before quoting."), { status: 409 });
       const stored = await sb.from("procurement_plans").select("items,cost_total,strategy").eq("id", selected.data.plan_id).single();
       if (stored.error) throw stored.error;
       const plan = { id: stored.data.strategy, items: stored.data.items, cost_total: Number(stored.data.cost_total), total_kg: Number(request.quantity_kg) } as Plan;
