@@ -5,6 +5,7 @@ import { resolve, dirname } from "node:path";
 import { qualityAgent } from "../src/lib/agents/quality";
 import { financeAgent } from "../src/lib/agents/finance";
 import { validatePlan } from "../src/lib/procurement/plans";
+import { platformExposure } from "../src/lib/finance/exposure";
 import type { Supplier, Deal, Allocation } from "../src/lib/types";
 
 const results: Array<{ name: string; status: string; reason?: string }> = [];
@@ -31,6 +32,28 @@ test("Plan validation totals duplicate supplier allocations against inventory", 
 });
 test("Normal fully received lot still passes quality", () => assert.equal(inspection(1000).decision, "passed"));
 test("Failed inspection contributes zero accepted quantity", () => assert.equal(qualityAgent({ allocated_kg: 1000, weight_received_kg: 1000, moisture_pct: 25, visual_score: 5, condition: "Good" }).usable_kg, 0));
+const exposureBase = { acceptedObligationsMinor: 6000000, capturedUsdMinor: 162500, pendingRefundsUsdMinor: 0, completedRefundsUsdMinor: 0, fxEgpPerUsd: 48 };
+test("Fulfilled locked fixture retains its 3000 EGP gross spread", () => {
+  assert.equal(platformExposure({ ...exposureBase, acceptedObligationsMinor: 7500000 }).netExposureMinor, -300000);
+});
+test("Completed full refund leaves the accepted 8T supplier obligation unfunded", () => {
+  const e = platformExposure({ ...exposureBase, completedRefundsUsdMinor: 162500 });
+  assert.equal(e.retainedEgpMinor, 0);
+  assert.equal(e.netExposureMinor, 6000000);
+});
+test("Pending USD refund reserves EGP funds and completion preserves exposure", () => {
+  const pending = platformExposure({ ...exposureBase, pendingRefundsUsdMinor: 10000 });
+  const completed = platformExposure({ ...exposureBase, completedRefundsUsdMinor: 10000 });
+  assert.equal(pending.pendingRefundsEgpMinor, 480000);
+  assert.equal(completed.retainedEgpMinor, 7320000);
+  assert.equal(pending.netExposureMinor, completed.netExposureMinor);
+});
+test("Exposure rejects refunds above the capture and invalid currency inputs", () => {
+  assert.throws(() => platformExposure({ ...exposureBase, pendingRefundsUsdMinor: 10000, completedRefundsUsdMinor: 162500 }));
+  assert.throws(() => platformExposure({ ...exposureBase, pendingRefundsUsdMinor: -1 }));
+  assert.throws(() => platformExposure({ ...exposureBase, capturedUsdMinor: 1.5 }));
+  assert.throws(() => platformExposure({ ...exposureBase, fxEgpPerUsd: 0 }));
+});
 const output = resolve(process.argv.find(a => a.startsWith("--report="))?.slice(9) ?? "../deployment-evidence/2026-10-15-domain-regressions-fixed.json");
 mkdirSync(dirname(output), { recursive: true });
 writeFileSync(output, JSON.stringify({ tests: results, pass: results.filter(t => t.status === "pass").length, fail: results.filter(t => t.status === "fail").length }, null, 2) + "\n");

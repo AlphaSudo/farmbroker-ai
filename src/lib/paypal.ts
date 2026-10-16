@@ -167,5 +167,5 @@ async function providerError(res: Response, operation: string): Promise<never> {
   const body = await res.json().catch(() => ({})) as { details?: Array<{ issue?: string }>; debug_id?: string };
   const issue = body.details?.[0]?.issue ?? "PROVIDER_ERROR";
   console.warn("PayPal operation rejected", { operation, status: res.status, issue, debugId: body.debug_id });
-  throw Object.assign(new Error(`PayPal ${operation}: ${issue}. ${issue === "COMPLIANCE_VIOLATION" ? "The sandbox account requires PayPal review; payment has not been verified." : "Retry or reconcile the existing attempt."}${body.debug_id ? ` Debug ID: ${body.debug_id}.` : ""}`), { status: res.status >= 500 ? 502 : 422 });
+  throw Object.assign(new Error(`PayPal ${operation}: ${issue}. ${issue === "COMPLIANCE_VIOLATION" ? "PayPal declined this sandbox transaction for compliance reasons; payment has not been verified." : "Retry or reconcile the existing attempt."}${body.debug_id ? ` Debug ID: ${body.debug_id}.` : ""}`), { status: res.status >= 500 ? 502 : 422 });
 }

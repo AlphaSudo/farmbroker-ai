@@ -11,7 +11,7 @@ export default function HubFinance({ params }: { params: Promise<{ id: string }>
     refunds?: Array<{ id: string; status: string; usd_minor: number; provider_refund_id: string | null; reason: string }>;
     events?: Array<{ type: string; payload: object; created_at: string }>;
     entitlementsMinor?: number;
-    exposure?: { acceptedObligationsMinor: number; pendingRefundsMinor: number; capturedEgpMinor: number; netExposureMinor: number } | null;
+    exposure?: { acceptedObligationsMinor: number; pendingRefundsUsdMinor: number; capturedEgpMinor: number; completedRefundsEgpMinor: number; retainedEgpMinor: number; netExposureMinor: number } | null;
   } | null>(null);
   const [msg, setMsg] = useState("");
   const [reason, setReason] = useState("");
@@ -51,8 +51,10 @@ export default function HubFinance({ params }: { params: Promise<{ id: string }>
             {d.deal.paypal_verified && <p className="text-sm text-emerald-200">Verified: {d.deal.paypal_verified.amount} {d.deal.paypal_verified.currency} · payee {d.deal.paypal_verified.payee}</p>}
             {d.exposure && (
               <div className="rounded-2xl border border-emerald-800 p-4 text-sm">
-                <p>Accepted obligations: <b>{(d.exposure.acceptedObligationsMinor / 100).toLocaleString()} EGP</b> · Pending refunds: <b>{(d.exposure.pendingRefundsMinor / 100).toFixed(2)} USDc</b></p>
-                <p>Captured: <b>{(d.exposure.capturedEgpMinor / 100).toLocaleString()} EGP</b> · Net exposure: <b className="text-amber-300">{(d.exposure.netExposureMinor / 100).toLocaleString()} EGP</b> (simulated obligations + real sandbox funds)</p>
+                <p>Accepted obligations: <b>{(d.exposure.acceptedObligationsMinor / 100).toLocaleString()} EGP</b> · Pending refunds: <b>{(d.exposure.pendingRefundsUsdMinor / 100).toFixed(2)} USD</b></p>
+                <p>Captured: <b>{(d.exposure.capturedEgpMinor / 100).toLocaleString()} EGP</b> · Refunded: <b>{(d.exposure.completedRefundsEgpMinor / 100).toLocaleString()} EGP</b> · Retained: <b>{(d.exposure.retainedEgpMinor / 100).toLocaleString()} EGP</b></p>
+                <p>Net exposure: <b className="text-amber-300">{(d.exposure.netExposureMinor / 100).toLocaleString()} EGP</b>. Positive exposure needs platform funding; negative exposure is retained funds above obligations.</p>
+                <p className="text-xs text-emerald-400">Calculated supplier obligations and actual sandbox capture/refund amounts.</p>
               </div>
             )}
             <h2 className="font-bold">Payment attempts</h2>            {(d.attempts ?? []).map((a) => <p key={a.id} className="font-mono text-xs text-emerald-200">{a.provider_order_id} — {a.status} — {(a.usd_minor / 100).toFixed(2)} USD</p>)}

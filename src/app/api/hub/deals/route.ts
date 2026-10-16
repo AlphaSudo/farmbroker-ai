@@ -26,11 +26,12 @@ export async function GET(req: Request) {
       const usable = Math.min(Number(a.usable_kg ?? a.allocated_kg), Number(a.allocated_kg));
       acceptedObligations += a.entitlement_minor ?? Math.round(usable * Number(a.entitlement_rate ?? (Number(a.allocated_kg) > 0 ? Number(a.cost) / Number(a.allocated_kg) : 0)) * 100);
     }
-    const pendingRefunds = ((refunds.data ?? []) as Array<{ status: string; usd_minor: number }>)
-      .filter((r) => ["requested", "pending"].includes(r.status)).reduce((s, r) => s + Number(r.usd_minor), 0);
+    const refundRows = (refunds.data ?? []) as Array<{ status: string; usd_minor: number }>;
+    const pendingRefunds = refundRows.filter((r) => ["requested", "pending", "needs_review"].includes(r.status)).reduce((s, r) => s + Number(r.usd_minor), 0);
+    const completedRefunds = refundRows.filter((r) => r.status === "completed").reduce((s, r) => s + Number(r.usd_minor), 0);
     const verified = (deal as { paypal_verified?: { amount?: string } | null }).paypal_verified;
     const exposure = platformExposure({
-      acceptedObligationsMinor: acceptedObligations, pendingRefundsMinor: pendingRefunds,
+      acceptedObligationsMinor: acceptedObligations, pendingRefundsUsdMinor: pendingRefunds, completedRefundsUsdMinor: completedRefunds,
       capturedUsdMinor: verified?.amount ? Math.round(Number(verified.amount) * 100) : 0, fxEgpPerUsd: 48,
     });
     return json({ deal, attempts: attempts.data ?? [], ledger: ledger.data ?? [], refunds: refunds.data ?? [], events: events.data ?? [], entitlementsMinor: acceptedObligations, exposure });
