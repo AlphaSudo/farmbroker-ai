@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-16T12:56:33.513Z",
+  "environment": "Actual PayPal Sandbox + deployed Vercel + live Supabase + real OpenRouter models",
+  "financialJourneyCommit": "250fffc119647175638e0a7843f94dd23cd767ee",
+  "accountingFixCommit": "07a10e0",
+  "receivingConfigurationFix": {
+    "merchantCountry": "EG",
+    "buyerCountry": "EG",
+    "previousAutomaticTransferDestination": null,
+    "newAutomaticTransferDestination": "Existing sandbox Visa ending 2102",
+    "successScreenConfirmed": true,
+    "appMerchantBuyerCredentialsChanged": false
+  },
+  "checks": {
+    "verifiedCapture": true,
+    "oneCapturePerOrder": true,
+    "boundPlanHashMatches": true,
+    "shortSettlementRefused": true,
+    "accepted8TRetained": true,
+    "realAiReplacement": true,
+    "fulfilledAtOriginalCharge": true,
+    "supplierEntitlements75000": true,
+    "captureReplayReused": true,
+    "inspectionReplayReused": true,
+    "separateFullRefundCompleted": true,
+    "refundReplayReused": true,
+    "refundedCaptureConfirmed": true,
+    "refundRemainsUnfulfilled": true,
+    "refundedCashNotRetained": true,
+    "acceptedObligationsRemain60000": true,
+    "authenticEventsProcessed": true
+  },
+  "recovery": {
+    "requestId": "685c5db1-56f8-4f87-99ff-7960a7edd068",
+    "dealId": "ee41be1c-8abc-43e3-9593-7b9e0f86dc1c",
+    "orderId": "4MH338451M954000A",
+    "captureId": "4AX46377UJ2507235",
+    "decisionId": "e40c25ae-231f-4ad5-9dfa-b56e1ac38702",
+    "planHash": "f94bae49708801c076b7e5677fc85aeff1d8d457ec03e83a96ab144b98b3f4eb",
+    "planModel": "Live AI (liquid/lfm-2.5-2.6b:free)",
+    "procurementMode": "Native durable worker executed the stored bound plan",
+    "replacement": {
+      "checkedAt": "2026-10-16T12:42:55.004Z",
+      "replacement": {
+        "id": "00358f69-8c2d-4409-a30a-da6a6c46b67e",
+        "kg": 2000,
+        "attempt": 2
+      },
+      "events": [
+        {
+          "payload": {
+            "plan": "cost-first",
+            "model": "nvidia/nemotron-3.5-lightning:free",
+            "incident": "168d83cb-3209-464e-824c-39713c4c1907"
+          },
+          "created_at": "2026-10-16T12:41:09.72925+00:00"
+        }
+      ],
+      "acceptedOriginalLotsRetained": [
+        {
+          "id": "5ec740aa-f5dc-4d7a-926b-7e414a9f2f74",
+          "kg": 3000
+        },
+        {
+          "id": "a491084a-773e-49c6-aae7-0c7cd0aac78c",
+          "kg": 5000
+        }
+      ]
+    },
+    "settlement": {
+      "total": 78000,
+      "margin": 3000,
+      "deal_id": "ee41be1c-8abc-43e3-9593-7b9e0f86dc1c",
+      "payouts": [
+        {
+          "label": "Supplier A",
+          "kg": 5000,
+          "amount": 37500,
+          "grade": "A",
+          "status": "Calculated (simulated payout)"
+        },
+        {
+          "label": "Supplier B",
+          "kg": 3000,
+          "amount": 22500,
+          "grade": "A",
+          "status": "Calculated (simulated payout)"
+        },
+        {
+          "label": "Supplier C",
+          "kg": 2000,
+          "amount": 15000,
+          "grade": "A",
+          "status": "Calculated (simulated payout)"
+        },
+        {
+          "label": "Supplier D",
+          "kg": 0,
+          "amount": 0,
+          "grade": null,
+          "status": "Excluded (failed inspection)"
+        }
+      ]
+    },
+    "outcome": "fulfilled",
+    "provider": {
+      "checkedAt": "2026-10-16T12:48:13.993Z",
+      "httpStatus": 200,
+      "orderStatus": "COMPLETED",
+      "amount": {
+        "currency_code": "USD",
+        "value": "1625.00",
+        "breakdown": {}
+      },
+      "merchantMatches": true,
+      "dealMatches": true,
+      "captures": [
+        {
+          "id": "4AX46377UJ2507235",
+          "status": "COMPLETED",
+          "amount": {
+            "currency_code": "USD",
+            "value": "1625.00"
+          }
+        }
+      ]
+    },
+    "events": [
+      {
+        "event_id": "WH-4G19316867161514D-45P95880PL3680623",
+        "type": "PAYMENT.CAPTURE.COMPLETED",
+        "processed": "processed",
+        "verified_by": "native"
+      },
+      {
+        "event_id": "WH-9VY7755799189270P-53K10352BV120613G",
+        "type": "CHECKOUT.ORDER.APPROVED",
+        "processed": "processed",
+        "verified_by": "native"
+      }
+    ],
+    "finance": {
+      "checkedAt": "2026-10-16T12:55:14.578Z",
+      "httpStatus": 200,
+      "exposure": {
+        "acceptedObligationsMinor": 7500000,
+        "pendingRefundsMinor": 0,
+        "pendingRefundsUsdMinor": 0,
+        "pendingRefundsEgpMinor": 0,
+        "completedRefundsUsdMinor": 0,
+        "completedRefundsEgpMinor": 0,
+        "capturedEgpMinor": 7800000,
+        "retainedEgpMinor": 7800000,
+        "netExposureMinor": -300000
+      }
+    }
+  },
+  "refund": {
+    "requestId": "6664ce08-3add-4581-a0d8-bd84e426caec",
+    "dealId": "fff8b83e-08eb-402d-9175-f7792da69615",
+    "orderId": "0VG6468303965313H",
+    "captureId": "81C97101FM686593F",
+    "refundId": "9DK12347NS950124R",
+    "procurementMode": "Operator called /api/procure; the same durable bound-command receipt is reused by the queued worker.",
+    "planHash": "ed6d3f8383d624ff65bfb59c232800758974220cd319cfaa2d8e4b400eb7e807",
+    "shortageKg": 2000,
+    "outcome": "refunded",
+    "provider": {
+      "checkedAt": "2026-10-16T12:48:17.252Z",
+      "httpStatus": 200,
+      "orderStatus": "COMPLETED",
+      "amount": {
+        "currency_code": "USD",
+        "value": "1625.00",
+        "breakdown": {}
+      },
+      "merchantMatches": true,
+      "dealMatches": true,
+      "captures": [
+        {
+          "id": "81C97101FM686593F",
+          "status": "REFUNDED",
+          "amount": {
+            "currency_code": "USD",
+            "value": "1625.00"
+          }
+        }
+      ]
+    },
+    "providerRefund": {
+      "httpStatus": 200,
+      "id": "9DK12347NS950124R",
+      "status": "COMPLETED",
+      "amount": {
+        "currency_code": "USD",
+        "value": "1625.00"
+      }
+    },
+    "events": [
+      {
+        "event_id": "WH-4DB44485F7745210K-6KG1873211642381W",
+        "type": "PAYMENT.CAPTURE.REFUNDED",
+        "processed": "processed",
+        "verified_by": "native"
+      },
+      {
+        "event_id": "WH-43688952FH220903W-5U418567MB289861U",
+        "type": "PAYMENT.CAPTURE.COMPLETED",
+        "processed": "processed",
+        "verified_by": "native"
+      },
+      {
+        "event_id": "WH-8WL31728DN924082E-53J57804YV569701G",
+        "type": "CHECKOUT.ORDER.APPROVED",
+        "processed": "processed",
+        "verified_by": "native"
+      }
+    ],
+    "finance": {
+      "checkedAt": "2026-10-16T12:55:15.717Z",
+      "httpStatus": 200,
+      "exposure": {
+        "acceptedObligationsMinor": 6000000,
+        "pendingRefundsMinor": 0,
+        "pendingRefundsUsdMinor": 0,
+        "pendingRefundsEgpMinor": 0,
+        "completedRefundsUsdMinor": 162500,
+        "completedRefundsEgpMinor": 7800000,
+        "capturedEgpMinor": 7800000,
+        "retainedEgpMinor": 0,
+        "netExposureMinor": 6000000
+      }
+    }
+  },
+  "limitations": [
+    "Supply, inspections and handover are simulated; supplier entitlements are calculated and payouts are not sent.",
+    "These two positive journeys do not prove high-load inventory contention, chaos, soak or native/postback corpus parity.",
+    "The earlier unpaid API harness retains its historical 65 pass / 0 fail / 6 blocked rows."
+  ]
+}

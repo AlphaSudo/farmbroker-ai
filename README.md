@@ -8,7 +8,7 @@ We sell **Guaranteed Supply**: buyer asks for 10 Tons Mint, the platform handles
 
 Next program: [2.0–2.9 architecture, performance, product, and evidence roadmap](docs/roadmap-2.0-2.9/README.md), based on the [expanded source review](docs/roadmap-2.0-2.9/source-review.md). Each iteration has an implementation plan and detailed checklist. The [1.1–1.9 roadmap](docs/roadmap/README.md) remains the earlier planning record.
 
-**Release audit:** the 2.x code is present, but “fully implemented” exceeds the retained proof. The October 16 hotfix passes the production build, 30 offline evals, six domain regressions, 35 rolled-back database checks with explicit provider/model stubs, and 12 offline signature-mechanics checks. Positive live capture/recovery/refund and declared load targets remain release gates. See the [v2.9 audit and remaining work](docs/evidence/v2.9-release-audit-2026-10-16.md) and the [earlier production evidence](docs/regression-fixes-2026-10-15.md).
+**Release audit:** the 2.x code is present, but "fully implemented" exceeds the retained proof. October 16 now includes actual sandbox capture, bound procurement, rejection and live AI recovery, settlement, simulated handover, and a separate completed full refund. The hotfix also passes the production build, 30 offline evals, 10 domain regressions, 35 rolled-back database checks with explicit provider/model stubs, and 12 offline signature-mechanics checks. Declared load targets and other architecture gates remain pending. See [paid journey evidence](docs/evidence/paid-journey-2026-10-16.json) and the [v2.9 audit and remaining work](docs/evidence/v2.9-release-audit-2026-10-16.md).
 
 ## Run it
 
@@ -38,8 +38,8 @@ Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@bu
 
 ## Tools used
 
-- **PayPal Sandbox**: Orders v2 API and JS SDK buttons. Create/approval are verified; actual capture/refund remain provider-blocked. No verified capture means no supplier commitment.
-- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling. Primary `nvidia/nemotron-3.5-lightning:free`, compatible fallback `liquid/lfm-2.5-2.6b:free`; actual Liquid planning completed through the native scheduler with the scenario tab closed. Selected decisions bind new quotes and execution; existing unbound contracts retain manual provenance. Positive live paid binding remains pending.
+- **PayPal Sandbox**: Orders v2 API and JS SDK buttons. Actual create/approval/capture and a separate completed full refund are verified. Native webhooks reconcile financial operations. No verified capture means no supplier commitment.
+- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling. Primary `nvidia/nemotron-3.5-lightning:free`, compatible fallback `liquid/lfm-2.5-2.6b:free`; actual Liquid planning completed through the native scheduler with the scenario tab closed. A paid plan's stored hash matched its committed items; Nvidia selected the demonstrated 2T recovery. Existing unbound contracts retain manual provenance.
 
 ## Kill test (demonstrated checks)
 
@@ -50,9 +50,9 @@ Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@bu
 
 | Area | Status |
 | --- | --- |
-| AI plan selection | Actual provider decision verified; richer intent/recovery acceptance remains part of the live rehearsal |
-| PayPal Sandbox lifecycle | Create/approval verified; capture/refund routes implemented, positive live loop blocked by provider compliance rejection |
-| Atomic reservations, idempotent operations, event timeline | Database integration verified with rolled-back provider stubs; positive paid production journey pending |
+| AI plan selection | Actual provider decisions and paid 2T recovery verified; richer intent remains partial |
+| PayPal Sandbox lifecycle | Two actual captures and one separate completed full refund verified |
+| Atomic reservations, idempotent operations, event timeline | Matching paid plan hash and operation replays verified; larger contention/load proof pending |
 | Supply/inspection/handover data, settlement math | Simulated + labeled |
 | Supplier payouts | Calculated only (`Ready for PayPal Payout`), never sent |
 | Real payouts, carriers, insurers, logistics | Future (out of scope) |
@@ -63,5 +63,5 @@ Full 1.1–1.9 program: `docs/roadmap/README.md` · evals: `npm run eval` · jud
 
 - Demo video (<3min, public YouTube): TODO_LINK
 - Live demo: https://farmbroker-aii.vercel.app
-- Last sandbox capture ID (proof): TODO_CAPTURE_ID
+- Sandbox capture proof: `4AX46377UJ2507235`; separate full refund proof: `9DK12347NS950124R`.
 - License: MIT.
