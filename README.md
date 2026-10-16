@@ -39,7 +39,7 @@ Sandbox test accounts (pattern, secrets stay in `.env.local`): business `sb-*@bu
 ## Tools used
 
 - **PayPal Sandbox**: Orders v2 API and JS SDK buttons. Create/approval are verified; actual capture/refund remain provider-blocked. No verified capture means no supplier commitment.
-- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling; retained provider checks used `nvidia/nemotron-3.5-lightning:free`. Selected decisions bind new quotes and execution; existing unbound contracts retain manual provenance. Positive live paid binding remains pending.
+- **AI (OpenRouter)**: schema-validated plan selection and negotiation tooling. Primary `nvidia/nemotron-3.5-lightning:free`, compatible fallback `liquid/lfm-2.5-2.6b:free`; actual Liquid planning completed through the native scheduler with the scenario tab closed. Selected decisions bind new quotes and execution; existing unbound contracts retain manual provenance. Positive live paid binding remains pending.
 
 ## Kill test (demonstrated checks)
 

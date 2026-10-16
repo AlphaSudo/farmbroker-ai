@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "environment": "PayPal Sandbox / deployed Vercel / live Supabase",
+  "operational": {
+    "checkedAt": "2026-10-16T10:50:33.423Z",
+    "deal": [
+      {
+        "id": "b3894985-aa07-47ee-b0ae-0e1c5ace95f5",
+        "status": "quoted",
+        "outcome": "pending",
+        "paypal_capture_id": null,
+        "accepted_quote_id": "1d9cb72b-2a31-4bbd-a18a-d48d94cb330b"
+      }
+    ],
+    "attempt": [
+      {
+        "status": "approved",
+        "provider_order_id": "9H181097AE572525U",
+        "quote_revision_id": "1d9cb72b-2a31-4bbd-a18a-d48d94cb330b"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "WH-9WU33519RU836781T-3C151279E73271322",
+        "type": "CHECKOUT.ORDER.APPROVED",
+        "processed": "received",
+        "verified_by": "native",
+        "created_at": "2026-10-16T00:50:58.482Z"
+      }
+    ],
+    "jobs": [
+      {
+        "id": "9932009d-8cd5-4a9d-a64b-709c4236808a",
+        "kind": "paypal_event",
+        "status": "review",
+        "attempt": 1,
+        "error": "PayPal capture: COMPLIANCE_VIOLATION. The sandbox account requires PayPal review; payment has not been verified.",
+        "created_at": "2026-10-16T00:50:58.482Z"
+      }
+    ],
+    "allocationCount": [
+      {
+        "count": 0
+      }
+    ],
+    "cron": [
+      {
+        "jobid": "1",
+        "jobname": "farmbroker-wake-1min",
+        "schedule": "* * * * *",
+        "active": true
+      }
+    ],
+    "cronRuns": [
+      {
+        "status": "succeeded",
+        "start_time": "2026-10-16T10:50:00.019Z",
+        "end_time": "2026-10-16T10:50:00.024Z"
+      },
+      {
+        "status": "succeeded",
+        "start_time": "2026-10-16T10:49:00.074Z",
+        "end_time": "2026-10-16T10:49:00.097Z"
+      },
+      {
+        "status": "succeeded",
+        "start_time": "2026-10-16T10:48:00.015Z",
+        "end_time": "2026-10-16T10:48:00.023Z"
+      }
+    ],
+    "deliveries": [
+      {
+        "status_code": 200,
+        "timed_out": false,
+        "error_msg": null,
+        "created": "2026-10-16T10:50:00.024Z"
+      },
+      {
+        "status_code": 200,
+        "timed_out": false,
+        "error_msg": null,
+        "created": "2026-10-16T10:49:00.097Z"
+      },
+      {
+        "status_code": 200,
+        "timed_out": false,
+        "error_msg": null,
+        "created": "2026-10-16T10:48:00.023Z"
+      }
+    ],
+    "migrations": {
+      "tracked": 17,
+      "mismatch": []
+    }
+  },
+  "planning": {
+    "requestId": "d76f8b6d-c6fa-4f9f-936a-268913559247",
+    "runId": "fe78ab17-b003-4fbd-a1f5-a65991d974be",
+    "jobId": "5525f803-c830-42f2-9686-de789342f5e0",
+    "startedAt": "2026-10-16T00:41:10.285Z",
+    "scenarioTabWasAlreadyClosed": true,
+    "browserAdvanceCalls": 0,
+    "manualWorkerCallsForThisRun": 0,
+    "previousRunId": "82773df7-0a3c-4a57-9cf5-e89d5b94a53d",
+    "reason": "Previous run exhausted three provider attempts before compatible fallback deployment; history retained.",
+    "initialJob": {
+      "id": "5525f803-c830-42f2-9686-de789342f5e0",
+      "status": "queued",
+      "attempt": 0,
+      "created_at": "2026-10-16T00:41:10.516808+00:00"
+    },
+    "sourceCommit": "d3377bc",
+    "final": {
+      "checkedAt": "2026-10-16T00:42:55.672Z",
+      "runStatus": "decided",
+      "runAttempts": 1,
+      "job": {
+        "status": "done",
+        "attempt": 1,
+        "error": null,
+        "next_attempt_at": "2026-10-16T00:43:26.250347+00:00"
+      },
+      "decision": {
+        "id": "69d47c21-feb0-4e6b-af93-dca417346720",
+        "planHash": "b672d513292096fe5f73c67ca8a080e9b3d7e8f65bcba13abbae924b73c053d0",
+        "provenance": "Live AI (liquid/lfm-2.5-2.6b:free)"
+      }
+    },
+    "verified": true
+  },
+  "paymentLookup": {
+    "httpStatus": 500,
+    "error": "INTERNAL_SERVICE_ERROR",
+    "debugId": "f53659532a3b3"
+  },
+  "financialLifecycleVerified": false,
+  "limitations": [
+    "One authentic native approval event; no native/postback corpus comparison.",
+    "Real provider capture rejected; paid procurement, recovery, fulfillment and refund remain unverified.",
+    "Snapshot timings and ablation are offline probes, not deployment load or AI-improvement proof."
+  ]
+}

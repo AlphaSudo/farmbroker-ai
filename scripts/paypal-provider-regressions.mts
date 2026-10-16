@@ -1,6 +1,6 @@
 // Offline PayPal adapter tests. All HTTP responses are explicit provider stubs.
 import assert from "node:assert/strict";
-import { verifyCapture } from "../src/lib/paypal";
+import { captureApprovedOrder, verifyCapture } from "../src/lib/paypal";
 const savedFetch=globalThis.fetch;
 const savedId=process.env.PAYPAL_CLIENT_ID, savedSecret=process.env.PAYPAL_SECRET;
 process.env.PAYPAL_CLIENT_ID="TEST-STUB";process.env.PAYPAL_SECRET="TEST-STUB";
@@ -24,6 +24,46 @@ try {
  body=order({payee:{email_address:"wrong@example.invalid"}});check("Approved-order payee binding is checked before capture", (await verify()).reason?.includes("binding mismatch")===true);
  body=order({payments:{captures:[{id:"TEST-STUB-CAPTURE",status:"COMPLETED",amount:{value:"1625.00",currency_code:"USD"}}]}});check("Completed bound capture verifies", (await verify()).ok);
  body=order({payments:{captures:[{id:"TEST-STUB-CAPTURE",status:"COMPLETED",amount:{value:"1.00",currency_code:"USD"}}]}});check("Capture amount mismatch is rejected",!(await verify()).ok);
+ const completed=()=>order({payments:{captures:[{id:"TEST-STUB-CAPTURE",status:"COMPLETED",amount:{value:"1625.00",currency_code:"USD"}}]}});
+ const capture=()=>captureApprovedOrder("TEST-STUB-ORDER","1625.00","merchant@example.invalid","TEST-STUB-DEAL","TEST-STUB-STABLE-KEY");
+ let captures=0;
+ const captureKeys:string[]=[];
+ globalThis.fetch=async(input,init)=>{
+  if(String(input).endsWith("/capture")){
+   captures++;captureKeys.push(new Headers(init?.headers).get("PayPal-Request-Id")??"");
+   body=completed();return Response.json({id:"TEST-STUB-ORDER",purchase_units:[{payments:{captures:[{id:"TEST-STUB-CAPTURE"}]}}]});
+  }
+  return Response.json(body,{status});
+ };
+ const forbidden:[string,object][]=[
+  ["wrong payee",order({payee:{email_address:"wrong@example.invalid"}})],
+  ["wrong deal",order({custom_id:"WRONG-DEAL"})],
+  ["wrong amount",order({amount:{value:"1.00",currency_code:"USD"}})],
+  ["wrong currency",order({amount:{value:"1625.00",currency_code:"EUR"}})],
+  ["unapproved order",{...order(),status:"CREATED"}],
+  ["pending existing capture",order({payments:{captures:[{id:"TEST-STUB-CAPTURE",status:"PENDING",amount:{value:"1625.00",currency_code:"USD"}}]}})],
+ ];
+ for(const [name,unbound]of forbidden){
+  body=unbound;await assert.rejects(capture,e=>(e as {status?:number}).status===409);
+  check(name+" sends zero capture POSTs",captures===0);
+ }
+ body=completed();check("Verified capture replay sends zero capture POSTs",(await capture()).ok&&captures===0);
+ body=order();check("Bound approved order captures and verifies",(await capture()).ok&&captures===1&&captureKeys[0]==="TEST-STUB-STABLE-KEY");
+ // Simulate an ambiguous response after a completed provider effect.
+ body=order();
+ globalThis.fetch=async(input)=>{
+  if(String(input).endsWith("/capture")){body=completed();return Response.json({details:[{issue:"ORDER_ALREADY_CAPTURED"}]},{status:422});}
+  return Response.json(body);
+ };
+ check("Lost-response reconciliation recognizes the existing bound capture",(await capture()).ok);
+ // A subsequent GET outage must not replace an actionable permanent rejection.
+ let rejected=false;body=order();
+ globalThis.fetch=async(input)=>{
+  if(String(input).endsWith("/capture")){rejected=true;return Response.json({details:[{issue:"COMPLIANCE_VIOLATION"}],debug_id:"TEST-STUB-DEBUG"},{status:422});}
+  return Response.json(rejected?{}:body,{status:rejected?503:200});
+ };
+ await assert.rejects(capture,e=>e instanceof Error&&e.message.includes("COMPLIANCE_VIOLATION")&&e.message.includes("TEST-STUB-DEBUG"));
+ check("Provider rejection and debug ID survive reconciliation outage",true);
  console.log(JSON.stringify({pass,fail:0,providerMode:"offline HTTP stubs"}));
 } finally {
  globalThis.fetch=savedFetch;

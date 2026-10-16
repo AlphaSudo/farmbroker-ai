@@ -119,6 +119,27 @@ export async function verifyCapture(orderId: string, expectedUsd: string, mercha
   return { ok: true, captureId: cap.id, status: cap.status, amount: cap.amount.value, currency: cap.amount.currency_code, payeeEmail };
 }
 
+// A failed verification is not permission to capture. Only an approved order
+// with the complete expected binding and no existing capture can move money.
+export async function captureApprovedOrder(orderId: string, expectedUsd: string, merchantEmail: string, dealId: string, operationKey: string): Promise<VerifiedCapture> {
+  const verify = () => verifyCapture(orderId, expectedUsd, merchantEmail, dealId);
+  let proof = await verify();
+  if (proof.ok) return proof;
+  if (proof.status !== "APPROVED" || proof.reason !== "no capture on order") {
+    throw Object.assign(new Error(`Order is not ready for capture: ${proof.reason}.`), { status: 409 });
+  }
+  try {
+    await captureOrder(orderId, operationKey);
+  } catch (captureError) {
+    // A lost response can follow a successful capture. A failed lookup must not
+    // hide the original provider rejection (including its support debug ID).
+    try { proof = await verify(); } catch { throw captureError; }
+    if (!proof.ok) throw captureError;
+    return proof;
+  }
+  return verify();
+}
+
 export async function refundCapture(captureId: string, usdValue: string, requestId?: string) {
   const access = await getAccessToken();
   return providerCall("refund", requestId ?? captureId, async () => {
@@ -146,5 +167,5 @@ async function providerError(res: Response, operation: string): Promise<never> {
   const body = await res.json().catch(() => ({})) as { details?: Array<{ issue?: string }>; debug_id?: string };
   const issue = body.details?.[0]?.issue ?? "PROVIDER_ERROR";
   console.warn("PayPal operation rejected", { operation, status: res.status, issue, debugId: body.debug_id });
-  throw Object.assign(new Error(`PayPal ${operation}: ${issue}. ${issue === "COMPLIANCE_VIOLATION" ? "The sandbox account requires PayPal review; payment has not been verified." : "Retry or reconcile the existing attempt."}`), { status: res.status >= 500 ? 502 : 422 });
+  throw Object.assign(new Error(`PayPal ${operation}: ${issue}. ${issue === "COMPLIANCE_VIOLATION" ? "The sandbox account requires PayPal review; payment has not been verified." : "Retry or reconcile the existing attempt."}${body.debug_id ? ` Debug ID: ${body.debug_id}.` : ""}`), { status: res.status >= 500 ? 502 : 422 });
 }
