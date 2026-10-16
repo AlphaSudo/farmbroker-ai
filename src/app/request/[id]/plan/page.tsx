@@ -36,7 +36,7 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
     const r = await fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: id }) });
     const d = await r.json();
     if (!r.ok) { setMsg(d.error); return; }
-    setRunId(d.runId); refresh(d.runId); setMsg("");
+    setData(null); setDecision(null); setRunId(d.runId); refresh(d.runId); setMsg("");
   }
   async function advance() {
     setBusy(true);
@@ -53,8 +53,9 @@ export default function PlanPage({ params }: { params: Promise<{ id: string }> }
       <Stepper id={id} current="plan" />
       <h1 className="text-3xl font-bold">AI Plan Selection</h1>
       <p className="text-sm text-emerald-300">The model picks one server-validated plan ID. Arithmetic, stock, and budget stay in code — never in the model.</p>
-      {!runId && <button onClick={create} disabled={!id} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950 disabled:opacity-50">Evaluate plans with AI</button>}
-      {runId && (
+      {data?.run?.status === "failed" && <p className="text-amber-200">Planning stopped after repeated service failures. Retry planning to start a fresh attempt.</p>}
+      {(!runId || data?.run?.status === "failed") && <button onClick={create} disabled={!id} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950 disabled:opacity-50">{runId ? "Retry planning" : "Evaluate plans with AI"}</button>}
+      {runId && data?.run?.status !== "failed" && (
         <button onClick={advance} disabled={busy} className="w-fit rounded-full bg-amber-400 px-6 py-3 font-bold text-emerald-950 disabled:opacity-50">
           {busy ? "Selecting…" : "Advance one step"}</button>
       )}
